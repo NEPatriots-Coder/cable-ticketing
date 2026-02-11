@@ -3,6 +3,7 @@ from app import db
 from app.models import User, Ticket, Notification
 from app.notifications import notify_ticket_created, notify_status_change
 from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy import or_
 from datetime import datetime
 
 api = Blueprint('api', __name__)
@@ -14,11 +15,17 @@ def register():
     """Register a new user"""
     data = request.json
 
-    if User.query.filter_by(username=data['username']).first():
-        return jsonify({'error': 'Username already exists'}), 400
-
-    if User.query.filter_by(email=data['email']).first():
-        return jsonify({'error': 'Email already exists'}), 400
+    # Make registration idempotent for demo/testing flows:
+    # if user already exists by username or email, return that user
+    # instead of failing with 400.
+    existing_user = User.query.filter(
+        or_(User.username == data['username'], User.email == data['email'])
+    ).first()
+    if existing_user:
+        return jsonify({
+            'message': 'User already exists',
+            'user': existing_user.to_dict()
+        }), 200
 
     user = User(
         username=data['username'],
