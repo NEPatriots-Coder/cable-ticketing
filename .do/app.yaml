@@ -1,6 +1,7 @@
-spec:
   name: cable-ticketing
   region: nyc
+  databases:
+    - name: cable-ticketing-db
   services:
     # Frontend Service
     - name: frontend
