@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import axios from '../api/axiosinstance';
 import TicketForm from '../components/TicketForm';
 import TicketList from '../components/TicketList';
 
@@ -13,7 +13,7 @@ function Dashboard({ user, onLogout }) {
 
   const fetchStats = async () => {
     try {
-      const response = await axios.get('dashboard/stats');
+      const response = await axios.get('/dashboard/stats');
       setStats(response.data);
     } catch (err) {
       console.error('Error fetching stats:', err);

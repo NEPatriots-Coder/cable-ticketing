@@ -1,39 +1,42 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import axios from '../api/axiosinstance';
+
+const getInitialFormData = () => ({
+  assigned_to_id: '',
+  cable_type: '',
+  cable_length: '',
+  cable_gauge: '',
+  location: '',
+  notes: '',
+  priority: 'medium'
+});
 
 function TicketForm({ currentUser, onTicketCreated }) {
   const [users, setUsers] = useState([]);
-  const [formData, setFormData] = useState({
-    assigned_to_id: '',
-    cable_type: '',
-    cable_length: '',
-    cable_gauge: '',
-    location: '',
-    notes: '',
-    priority: 'medium'
-  });
+  const [formData, setFormData] = useState(getInitialFormData);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
   useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const response = await axios.get('/users');
+        // Show all users (including current user for testing)
+        setUsers(response.data);
+      } catch (err) {
+        console.error('Error fetching users:', err);
+      }
+    };
+
     fetchUsers();
   }, []);
 
-  const fetchUsers = async () => {
-    try {
-      const response = await axios.get('/users');
-      // Show all users (including current user for testing)
-      setUsers(response.data);
-    } catch (err) {
-      console.error('Error fetching users:', err);
-    }
-  };
-
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value
+    }));
   };
 
   const handleSubmit = async (e) => {
@@ -48,15 +51,7 @@ function TicketForm({ currentUser, onTicketCreated }) {
       });
 
       setSuccess('Ticket created! Notification sent to assignee.');
-      setFormData({
-        assigned_to_id: '',
-        cable_type: '',
-        cable_length: '',
-        cable_gauge: '',
-        location: '',
-        notes: '',
-        priority: 'medium'
-      });
+      setFormData(getInitialFormData());
 
       if (onTicketCreated) {
         onTicketCreated(response.data.ticket);

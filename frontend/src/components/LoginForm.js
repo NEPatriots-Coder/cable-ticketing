@@ -3,19 +3,23 @@ import axios from '../api/axiosinstance';
 import { Link } from 'react-router-dom';
 
 function LoginForm({ onLogin }) {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [credentials, setCredentials] = useState({ username: '', password: '' });
   const [error, setError] = useState('');
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setCredentials((prev) => ({
+      ...prev,
+      [name]: value
+    }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
     try {
-      const response = await axios.post('/login', {
-        username,
-        password
-      });
+      const response = await axios.post('/login', credentials);
 
       onLogin(response.data.user);
     } catch (err) {
@@ -36,8 +40,9 @@ function LoginForm({ onLogin }) {
             <label>Username</label>
             <input
               type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              name="username"
+              value={credentials.username}
+              onChange={handleChange}
               required
             />
           </div>
@@ -46,8 +51,9 @@ function LoginForm({ onLogin }) {
             <label>Password</label>
             <input
               type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              name="password"
+              value={credentials.password}
+              onChange={handleChange}
               required
             />
           </div>

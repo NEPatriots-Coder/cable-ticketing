@@ -1,16 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import axios from '../api/axiosinstance';
 
 function TicketList({ currentUser, refreshTrigger }) {
   const [tickets, setTickets] = useState([]);
   const [filter, setFilter] = useState('all');
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchTickets();
-  }, [refreshTrigger]);
-
-  const fetchTickets = async () => {
+  const fetchTickets = useCallback(async () => {
     try {
       const response = await axios.get('/tickets');
       setTickets(response.data);
@@ -19,11 +15,15 @@ function TicketList({ currentUser, refreshTrigger }) {
       console.error('Error fetching tickets:', err);
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchTickets();
+  }, [fetchTickets, refreshTrigger]);
 
   const handleStatusUpdate = async (ticketId, newStatus) => {
     try {
-      await axios.patch(`/api/tickets/${ticketId}`, { status: newStatus });
+      await axios.patch(`/tickets/${ticketId}`, { status: newStatus });
       fetchTickets(); // Refresh list
     } catch (err) {
       console.error('Error updating ticket:', err);
@@ -31,14 +31,25 @@ function TicketList({ currentUser, refreshTrigger }) {
     }
   };
 
-  const getFilteredTickets = () => {
+  const createdTickets = useMemo(
+    () => tickets.filter((t) => t.created_by.id === currentUser.id),
+    [tickets, currentUser.id]
+  );
+
+  const assignedTickets = useMemo(
+    () => tickets.filter((t) => t.assigned_to.id === currentUser.id),
+    [tickets, currentUser.id]
+  );
+
+  const filteredTickets = useMemo(() => {
     if (filter === 'created') {
-      return tickets.filter(t => t.created_by.id === currentUser.id);
-    } else if (filter === 'assigned') {
-      return tickets.filter(t => t.assigned_to.id === currentUser.id);
+      return createdTickets;
+    }
+    if (filter === 'assigned') {
+      return assignedTickets;
     }
     return tickets;
-  };
+  }, [filter, tickets, createdTickets, assignedTickets]);
 
   const getStatusBadgeClass = (status) => {
     const classes = {
@@ -65,8 +76,6 @@ function TicketList({ currentUser, refreshTrigger }) {
     return <div className="loading">Loading tickets...</div>;
   }
 
-  const filteredTickets = getFilteredTickets();
-
   return (
     <div className="ticket-list-container">
       <div className="ticket-list-header">
@@ -82,13 +91,13 @@ function TicketList({ currentUser, refreshTrigger }) {
             className={filter === 'created' ? 'active' : ''}
             onClick={() => setFilter('created')}
           >
-            Created by Me ({tickets.filter(t => t.created_by.id === currentUser.id).length})
+            Created by Me ({createdTickets.length})
           </button>
           <button
             className={filter === 'assigned' ? 'active' : ''}
             onClick={() => setFilter('assigned')}
           >
-            Assigned to Me ({tickets.filter(t => t.assigned_to.id === currentUser.id).length})
+            Assigned to Me ({assignedTickets.length})
           </button>
         </div>
       </div>

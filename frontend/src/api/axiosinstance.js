@@ -1,7 +1,8 @@
 import axios from 'axios';
 
 const axiosInstance = axios.create({
-  baseURL: '/api',  // This will be proxied by nginx to backend
+  // Keep API calls relative so DigitalOcean path routing can send /api to backend.
+  baseURL: '/api',
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',

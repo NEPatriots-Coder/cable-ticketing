@@ -1,24 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import axios from 'axios';
+import axios from '../api/axiosinstance';
 
 function ApprovalPage({ action }) {
   const { ticketId, token } = useParams();
   const [status, setStatus] = useState('loading');
   const [ticket, setTicket] = useState(null);
   const [rejectionReason, setRejectionReason] = useState('');
-  const [showReasonInput, setShowReasonInput] = useState(false);
-
-  useEffect(() => {
-    if (action === 'approve') {
-      handleApprove();
-    } else {
-      setShowReasonInput(true);
-      setStatus('awaiting_reason');
-    }
-  }, []);
-
-  const handleApprove = async () => {
+  
+  const handleApprove = useCallback(async () => {
     try {
       const response = await axios.get(`/tickets/${ticketId}/approve/${token}`);
       setTicket(response.data.ticket);
@@ -27,12 +17,20 @@ function ApprovalPage({ action }) {
       setStatus('error');
       console.error(err);
     }
-  };
+  }, [ticketId, token]);
+
+  useEffect(() => {
+    if (action === 'approve') {
+      handleApprove();
+    } else {
+      setStatus('awaiting_reason');
+    }
+  }, [action, handleApprove]);
 
   const handleReject = async () => {
     try {
       const response = await axios.post(
-        `/api/tickets/${ticketId}/reject/${token}`,
+        `/tickets/${ticketId}/reject/${token}`,
         { reason: rejectionReason }
       );
       setTicket(response.data.ticket);
