@@ -21,7 +21,7 @@ function TicketForm({ currentUser, onTicketCreated }) {
 
   const fetchUsers = async () => {
     try {
-      const response = await axios.get('/api/users');
+      const response = await axios.get('/users');
       // Show all users (including current user for testing)
       setUsers(response.data);
     } catch (err) {
@@ -42,7 +42,7 @@ function TicketForm({ currentUser, onTicketCreated }) {
     setSuccess('');
 
     try {
-      const response = await axios.post('/api/tickets', {
+      const response = await axios.post('/tickets', {
         ...formData,
         created_by_id: currentUser.id
       });

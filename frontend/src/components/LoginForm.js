@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import axios from '../api/axiosinstance';
 import { Link } from 'react-router-dom';
 
 function LoginForm({ onLogin }) {
@@ -12,7 +12,7 @@ function LoginForm({ onLogin }) {
     setError('');
 
     try {
-      const response = await axios.post('/api/login', {
+      const response = await axios.post('/login', {
         username,
         password
       });

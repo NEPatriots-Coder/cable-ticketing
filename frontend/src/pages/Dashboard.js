@@ -13,7 +13,7 @@ function Dashboard({ user, onLogout }) {
 
   const fetchStats = async () => {
     try {
-      const response = await axios.get('/api/dashboard/stats');
+      const response = await axios.get('dashboard/stats');
       setStats(response.data);
     } catch (err) {
       console.error('Error fetching stats:', err);

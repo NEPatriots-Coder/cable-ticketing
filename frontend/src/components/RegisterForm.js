@@ -23,7 +23,7 @@ function RegisterForm({ onRegister }) {
     setError('');
 
     try {
-      const response = await axios.post('/api/register', formData);
+      const response = await axios.post('/register', formData);
       onRegister(response.data.user);
     } catch (err) {
       setError(err.response?.data?.error || 'Registration failed');

@@ -1,47 +1,69 @@
-name: cable-ticketing
+spec:
+  name: cable-ticketing
+  region: nyc
+  services:
+    # Frontend Service
+    - name: frontend
+      github:
+        repo: NEPatriots-Coder/cable-ticketing
+        branch: main
+        deploy_on_push: true
+      source_dir: frontend
+      build_command: npm run build
+      http_port: 80
+      http:
+        # THIS IS CRITICAL - need a route
+        routes:
+          - path: /
+      health_check:
+        http_path: /
+      log_destination_ref: cable-logs
+      
+    # Backend Service
+    - name: backend
+      github:
+        repo: NEPatriots-Coder/cable-ticketing
+        branch: main
+        deploy_on_push: true
+      source_dir: backend
+      build_command: echo "Build complete"
+      run_command: gunicorn --bind 0.0.0.0:5000 --workers 2 --timeout 120 run:app
+      http_port: 5000
+      http:
+        # THIS IS CRITICAL - the /api route must exist
+        routes:
+          - path: /api
+      health_check:
+        http_path: /api/health
+      envs:
+        - key: SECRET_KEY
+          value: your-secret-key-here
+        - key: DATABASE_URL
+          value: ${db.DATABASE_URL}
+        - key: FLASK_ENV
+          value: production
+        - key: TWILIO_ACCOUNT_SID
+          value: ${TWILIO_ACCOUNT_SID}
+        - key: TWILIO_AUTH_TOKEN
+          value: ${TWILIO_AUTH_TOKEN}
+        - key: TWILIO_PHONE_NUMBER
+          value: ${TWILIO_PHONE_NUMBER}
+        - key: SENDGRID_API_KEY
+          value: ${SENDGRID_API_KEY}
+        - key: SENDGRID_FROM_EMAIL
+          value: ${SENDGRID_FROM_EMAIL}
+        - key: APP_URL
+          value: ${APP_DOMAIN}
+      log_destination_ref: cable-logs
 
-# Database
-databases:
-  - name: cable-ticketing-db
-    engine: PG
-    version: "12"
-    production: false
-    cluster_name: cable-ticketing-db-cluster
-
-services:
-  - name: backend
-    # Remove GitHub integration - will use doctl CLI to deploy
-    source_dir: backend
-    dockerfile_path: Dockerfile
-    http_port: 5000
-    instance_count: 1
-    instance_size_slug: basic-xxs
-    routes:
-      - path: /api
-    envs:
-      - key: RESEND_API_KEY
-        value: re_MiUCti2n_848yKud2ZdN7ZRBUvtq9Negi
-      - key: SENDGRID_FROM_EMAIL
-        value: onboarding@resend.dev
-      - key: SECRET_KEY
-        value: prod-secret-key-change-me-12345
-      - key: DATABASE_URL
-        scope: RUN_AND_BUILD_TIME
-        value: ${cable-ticketing-db.DATABASE_URL}
-      - key: APP_URL
-        scope: RUN_AND_BUILD_TIME
-        value: ${_self.PUBLIC_URL}
-
-  - name: frontend
-    # Remove GitHub integration - will use doctl CLI to deploy
-    source_dir: frontend
-    dockerfile_path: Dockerfile
-    http_port: 80
-    instance_count: 1
-    instance_size_slug: basic-xxs
-    routes:
-      - path: /
-    envs:
-      - key: REACT_APP_API_URL
-        scope: BUILD_TIME
-        value: ${backend.PUBLIC_URL}
+  # PostgreSQL Database
+  databases:
+    - name: db
+      engine: PG
+      version: "12"
+      production: false
+      
+  log_destinations:
+    - name: cable-logs
+      datadog:
+        api_key: ${DATADOG_API_KEY}

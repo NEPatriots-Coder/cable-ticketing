@@ -20,7 +20,7 @@ function ApprovalPage({ action }) {
 
   const handleApprove = async () => {
     try {
-      const response = await axios.get(`/api/tickets/${ticketId}/approve/${token}`);
+      const response = await axios.get(`/tickets/${ticketId}/approve/${token}`);
       setTicket(response.data.ticket);
       setStatus('success');
     } catch (err) {

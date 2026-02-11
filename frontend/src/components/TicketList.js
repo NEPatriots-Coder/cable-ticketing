@@ -12,7 +12,7 @@ function TicketList({ currentUser, refreshTrigger }) {
 
   const fetchTickets = async () => {
     try {
-      const response = await axios.get('/api/tickets');
+      const response = await axios.get('/tickets');
       setTickets(response.data);
       setLoading(false);
     } catch (err) {
