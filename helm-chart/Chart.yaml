@@ -1,0 +1,14 @@
+apiVersion: v2
+name: cable-ticketing
+description: Cable Ticketing System - Jira-like ticketing app for cabling requests
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - ticketing
+  - cable-management
+  - flask
+  - react
+maintainers:
+  - name: Lamar
+    email: lkennethwells@gmail.com

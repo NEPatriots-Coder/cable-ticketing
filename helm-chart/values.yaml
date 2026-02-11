@@ -1,0 +1,101 @@
+# Default values for cable-ticketing
+replicaCount: 1
+
+backend:
+  image:
+    repository: cable-ticketing-backend
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 5000
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  env:
+    secretKey: "change-this-in-production"
+    databaseUrl: "sqlite:///ticketing.db"
+    appUrl: "http://localhost:3000"
+    sendgridFromEmail: "noreply@cabletickets.com"
+
+frontend:
+  image:
+    repository: cable-ticketing-frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: LoadBalancer
+    port: 80
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "250m"
+
+# Secrets (should be provided via separate secret or values override)
+secrets:
+  twilioAccountSid: ""
+  twilioAuthToken: ""
+  twilioPhoneNumber: ""
+  sendgridApiKey: ""
+
+# Ingress configuration (optional)
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: cable-tickets.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: cable-tickets-tls
+  #    hosts:
+  #      - cable-tickets.example.com
+
+# Persistence
+persistence:
+  enabled: true
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 1Gi
+
+# Autoscaling (optional)
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+
+# Pod annotations
+podAnnotations: {}
+
+# Security context
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity
+affinity: {}
