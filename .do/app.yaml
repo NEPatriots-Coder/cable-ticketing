@@ -1,0 +1,47 @@
+name: cable-ticketing
+
+# Database
+databases:
+  - name: cable-ticketing-db
+    engine: PG
+    version: "12"
+    production: false
+    cluster_name: cable-ticketing-db-cluster
+
+services:
+  - name: backend
+    # Remove GitHub integration - will use doctl CLI to deploy
+    source_dir: backend
+    dockerfile_path: Dockerfile
+    http_port: 5000
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    routes:
+      - path: /api
+    envs:
+      - key: RESEND_API_KEY
+        value: re_MiUCti2n_848yKud2ZdN7ZRBUvtq9Negi
+      - key: SENDGRID_FROM_EMAIL
+        value: onboarding@resend.dev
+      - key: SECRET_KEY
+        value: prod-secret-key-change-me-12345
+      - key: DATABASE_URL
+        scope: RUN_AND_BUILD_TIME
+        value: ${cable-ticketing-db.DATABASE_URL}
+      - key: APP_URL
+        scope: RUN_AND_BUILD_TIME
+        value: ${_self.PUBLIC_URL}
+
+  - name: frontend
+    # Remove GitHub integration - will use doctl CLI to deploy
+    source_dir: frontend
+    dockerfile_path: Dockerfile
+    http_port: 80
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    routes:
+      - path: /
+    envs:
+      - key: REACT_APP_API_URL
+        scope: BUILD_TIME
+        value: ${backend.PUBLIC_URL}

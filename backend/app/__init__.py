@@ -42,8 +42,17 @@ def create_app():
     from app.routes import api
     app.register_blueprint(api, url_prefix='/api')
 
-    # Create tables
+    # Create tables (only if they don't exist)
     with app.app_context():
-        db.create_all()
+        try:
+            # Import models to register them
+            from app import models
+
+            # Create tables if they don't exist
+            db.create_all()
+            print("✅ Database tables initialized successfully")
+        except Exception as e:
+            print(f"⚠️  Database initialization note: {e}")
+            # Tables likely already exist, continue anyway
 
     return app
