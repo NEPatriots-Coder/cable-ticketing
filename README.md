@@ -1,93 +1,99 @@
-# 🔌 Cable Ticketing System
+# Cable Ticketing System
 
-A Jira-like ticketing application specifically designed for managing cable requests. Built with React frontend, Flask backend, and fully containerized with Docker and Kubernetes support.
+A Jira-like ticketing application for managing cable requests. Built with React frontend, Flask backend, and fully containerized with Docker and Kubernetes support.
 
-## Features
+## The Problem It Solves
 
-- **Bidirectional Ticketing**: Create and manage cable requests between teams
-- **SMS & Email Notifications**: Automatic notifications via Twilio and SendGrid
-- **Approve/Reject Workflow**: One-click approve/reject links in notifications
-- **Real-time Dashboard**: View ticket status and statistics
-- **User Management**: Simple authentication and role management
-- **Mobile-Friendly**: Responsive design works on all devices
-- **Cloud-Native**: Fully containerized with Kubernetes/Helm support
+- Technician needs 100ft of Cat6 cable for a new office
+- Currently: Phone call, email, or walk to inventory room
+- Problem: No tracking, no accountability, chaos
+
+**With this system:** Technician creates a ticket (30 seconds) -> Inventory staff gets SMS + Email instantly -> One-click approve/reject -> Automatic status tracking -> Full audit trail.
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        User's Browser                       │
+│                   (React Frontend - Port 3000)              │
+└────────────────────────┬────────────────────────────────────┘
+                         │ HTTP/REST API
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    Flask Backend (Port 5000)                 │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
+│  │   Routes     │  │   Models     │  │ Notifications│      │
+│  │ (API Logic)  │  │ (Database)   │  │ (SMS/Email)  │      │
+│  └──────────────┘  └──────────────┘  └──────────────┘      │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+         ┌───────────────┼───────────────┐
+         ▼               ▼               ▼
+    ┌─────────┐    ┌─────────┐    ┌──────────┐
+    │SQLite/  │    │ Twilio  │    │ Resend/  │
+    │Postgres │    │  (SMS)  │    │ SendGrid │
+    └─────────┘    └─────────┘    └──────────┘
+```
 
 ## Tech Stack
 
-### Backend
-- **Flask** - Python web framework
-- **SQLAlchemy** - ORM for database management
-- **SQLite** (dev) / **PostgreSQL** (prod)
-- **Twilio** - SMS notifications
-- **SendGrid** - Email notifications
-
-### Frontend
-- **React** - UI library
-- **React Router** - Client-side routing
-- **Axios** - HTTP client
-- **CSS3** - Styling
-
-### DevOps
-- **Docker** - Containerization
-- **Docker Compose** - Local development orchestration
-- **Helm** - Kubernetes package manager
-- **Kubernetes** - Container orchestration (CoreWeave)
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 18, React Router v6, Axios, CSS3 |
+| Backend | Flask 3.0, SQLAlchemy, Gunicorn |
+| Database | SQLite (dev) / PostgreSQL (prod) |
+| Notifications | Resend/SendGrid (email), Twilio/AWS SNS (SMS) |
+| DevOps | Docker, Docker Compose, Helm, Kubernetes |
 
 ## Quick Start
 
 ### Prerequisites
 
-- Docker & Docker Compose
-- Node.js 18+ (for local development)
-- Python 3.11+ (for local development)
-- Twilio account (for SMS)
-- SendGrid account (for email)
+- Docker & Docker Compose (or Node.js 18+ and Python 3.11+ for local dev)
+- Resend or SendGrid account (for email)
+- Twilio account (for SMS, optional)
 
-### 1. Clone and Setup
+### Option A: Docker Compose
 
 ```bash
 cd ticketing_app
-
-# Copy environment file
 cp backend/.env.example backend/.env
-
 # Edit backend/.env with your credentials
-# - Add Twilio credentials
-# - Add SendGrid API key
-# - Update APP_URL if needed
+
+docker-compose up --build
+# Frontend: http://localhost:3000
+# Backend:  http://localhost:5000
 ```
 
-### 2. Run with Docker Compose
+### Option B: Run Locally
 
 ```bash
-# Build and start all services
-docker-compose up --build
+# Backend
+cd backend
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+python run.py
+# Runs at http://localhost:5000
 
-# Access the application
-# Frontend: http://localhost:3000
-# Backend API: http://localhost:5000
+# Frontend (separate terminal)
+cd frontend
+npm install
+npm start
+# Runs at http://localhost:3000
 ```
 
-### 3. Create Your First User
+> **Note (macOS):** If port 5000 is taken by AirPlay Receiver, change the backend port to 5001 in `docker-compose.yml` and `run.py`.
 
-Navigate to http://localhost:3000 and click **Register**.
+### First Steps
 
-Fill in:
-- Username
-- Email
-- Phone (with country code, e.g., +12025551234)
-- Password
-
-### 4. Create a Ticket
-
-1. Log in
-2. Fill out the cable request form
-3. Assign to another user
-4. The assignee receives SMS + Email with approve/reject links!
+1. Open http://localhost:3000
+2. Click **Register** and create a user (username, email, phone, password)
+3. Create a second user (for assigning tickets)
+4. Log in and create a cable request ticket
+5. The assignee receives SMS + Email with approve/reject links
 
 ## Configuration
-
-### Backend Environment Variables
 
 Edit `backend/.env`:
 
@@ -95,154 +101,38 @@ Edit `backend/.env`:
 # Flask
 SECRET_KEY=your-secret-key-here
 DATABASE_URL=sqlite:///ticketing.db
-# For PostgreSQL: postgresql://user:password@postgres:5432/ticketing
+
+# Resend (Email - primary)
+RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+SENDGRID_FROM_EMAIL=onboarding@resend.dev
+
+# SendGrid (Email - fallback)
+SENDGRID_API_KEY=SG.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 # Twilio (SMS)
 TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 TWILIO_AUTH_TOKEN=your_auth_token
 TWILIO_PHONE_NUMBER=+1234567890
 
-# SendGrid (Email)
-SENDGRID_API_KEY=SG.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-SENDGRID_FROM_EMAIL=noreply@yourdomain.com
-
 # App URL (for notification links)
 APP_URL=http://localhost:3000
 ```
 
-### Getting API Keys
+## Workflow
 
-**Twilio** (SMS):
-1. Sign up at https://www.twilio.com
-2. Get a phone number ($1/month)
-3. Copy Account SID, Auth Token, and Phone Number
-4. Cost: ~$0.0075 per SMS
-
-**SendGrid** (Email):
-1. Sign up at https://sendgrid.com
-2. Create an API key
-3. Free tier: 100 emails/day
-
-## Development
-
-### Run Backend Locally
-
-```bash
-cd backend
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-python run.py
+```
+Create Ticket → Pending Approval → Approved/Rejected → In Progress → Fulfilled
 ```
 
-Backend runs at http://localhost:5000
+1. **User A** creates a cable request ticket
+2. **User B** (assignee) receives SMS + Email with approve/reject links
+3. **User B** clicks approve/reject link
+4. **User A** receives notification of the decision
+5. If approved, **User B** marks as "In Progress" then "Fulfilled"
 
-### Run Frontend Locally
+### Ticket Statuses
 
-```bash
-cd frontend
-npm install
-npm start
-```
-
-Frontend runs at http://localhost:3000
-
-## Deployment to CoreWeave (Kubernetes)
-
-### Prerequisites
-
-- CoreWeave account
-- `kubectl` configured for CoreWeave
-- `helm` installed
-- Docker images built and pushed to a registry
-
-### 1. Build and Push Docker Images
-
-```bash
-# Build images
-docker build -t your-registry/cable-ticketing-backend:latest ./backend
-docker build -t your-registry/cable-ticketing-frontend:latest ./frontend
-
-# Push to registry (Docker Hub, GCR, ECR, etc.)
-docker push your-registry/cable-ticketing-backend:latest
-docker push your-registry/cable-ticketing-frontend:latest
-```
-
-### 2. Configure Helm Values
-
-Create `helm-values-production.yaml`:
-
-```yaml
-backend:
-  image:
-    repository: your-registry/cable-ticketing-backend
-    tag: latest
-  env:
-    secretKey: "CHANGE-THIS-TO-RANDOM-STRING"
-    databaseUrl: "sqlite:///ticketing.db"  # Or PostgreSQL URL
-    appUrl: "https://your-domain.com"
-    sendgridFromEmail: "noreply@yourdomain.com"
-
-frontend:
-  image:
-    repository: your-registry/cable-ticketing-frontend
-    tag: latest
-  service:
-    type: LoadBalancer  # Or NodePort for CoreWeave
-
-secrets:
-  twilioAccountSid: "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-  twilioAuthToken: "your_auth_token"
-  twilioPhoneNumber: "+1234567890"
-  sendgridApiKey: "SG.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-
-ingress:
-  enabled: true
-  className: "nginx"
-  hosts:
-    - host: cable-tickets.your-domain.com
-      paths:
-        - path: /
-          pathType: Prefix
-```
-
-### 3. Deploy with Helm
-
-```bash
-# Install
-helm install cable-ticketing ./helm-chart -f helm-values-production.yaml
-
-# Or upgrade existing deployment
-helm upgrade cable-ticketing ./helm-chart -f helm-values-production.yaml
-
-# Check status
-kubectl get pods
-kubectl get services
-```
-
-### 4. Access Your Application
-
-```bash
-# Get the external IP
-kubectl get service cable-ticketing-frontend
-
-# Access via LoadBalancer IP or configure DNS
-```
-
-## Helm Chart Configuration
-
-Key values in `helm-chart/values.yaml`:
-
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| `replicaCount` | Number of pod replicas | `1` |
-| `backend.image.repository` | Backend Docker image | `cable-ticketing-backend` |
-| `frontend.image.repository` | Frontend Docker image | `cable-ticketing-frontend` |
-| `backend.service.type` | Backend service type | `ClusterIP` |
-| `frontend.service.type` | Frontend service type | `LoadBalancer` |
-| `persistence.enabled` | Enable persistent storage | `true` |
-| `persistence.size` | Storage size | `1Gi` |
-| `ingress.enabled` | Enable ingress | `false` |
+`pending_approval` → `approved` / `rejected` → `in_progress` → `fulfilled` → `closed`
 
 ## API Endpoints
 
@@ -266,59 +156,82 @@ Key values in `helm-chart/values.yaml`:
 
 ### Dashboard
 - `GET /api/dashboard/stats` - Get statistics
+- `GET /api/health` - Health check
 
-## Workflow
+## Database Schema
 
-1. **User A** creates a cable request ticket
-2. **User B** (assignee) receives **SMS + Email** with approve/reject links
-3. **User B** clicks approve/reject link
-4. **User A** receives notification of approval/rejection
-5. If approved, **User B** can mark as "In Progress" → "Fulfilled"
-6. Ticket is complete!
+### Users
+```sql
+id, username, email, phone, password_hash, role, created_at
+```
 
-## Ticket Statuses
+### Tickets
+```sql
+id, created_by_id, assigned_to_id, status, cable_type, cable_length,
+cable_gauge, location, notes, priority, approval_token, rejection_reason,
+created_at, updated_at
+```
 
-- `pending_approval` - Awaiting assignee response
-- `approved` - Approved, ready to start
-- `rejected` - Rejected by assignee
-- `in_progress` - Work in progress
-- `fulfilled` - Completed
-- `closed` - Archived
+### Notifications
+```sql
+id, ticket_id, recipient_user_id, notification_type, status,
+error_message, sent_at, created_at
+```
 
-## Troubleshooting
+## Testing
 
-### SMS not sending
-- Check Twilio credentials in `.env`
-- Verify phone numbers include country code (e.g., +1234567890)
-- Check Twilio account balance
+### Quick Test (Without SMS/Email)
 
-### Email not sending
-- Check SendGrid API key
-- Verify sender email is authenticated in SendGrid
-- Check SendGrid sending limits (100/day on free tier)
+The app works without notification services configured -- notifications fail gracefully.
 
-### Database issues
-- For production, switch to PostgreSQL
-- Update `DATABASE_URL` in ConfigMap/Secret
-
-### Frontend can't reach backend
-- Check `APP_URL` environment variable
-- Verify backend service is running: `kubectl get svc`
-- Check nginx proxy configuration in `frontend/nginx.conf`
-
-## Production Recommendations
-
-1. **Use PostgreSQL** instead of SQLite
+1. Start the app, register two users
+2. Create a ticket as User 1, assigned to User 2
+3. Get the approval token from backend logs or database:
    ```bash
-   DATABASE_URL=postgresql://user:password@postgres:5432/ticketing
+   docker-compose exec backend python -c "
+   from app import create_app, db
+   from app.models import Ticket
+   app = create_app()
+   with app.app_context():
+       ticket = Ticket.query.first()
+       if ticket:
+           print(f'http://localhost:3000/tickets/{ticket.id}/approve/{ticket.approval_token}')
+   "
    ```
+4. Visit the approval URL to approve, then complete the workflow
 
-2. **Enable HTTPS** via Ingress + cert-manager
-3. **Add Celery + Redis** for async notification sending
-4. **Set up monitoring** (Prometheus + Grafana)
-5. **Enable autoscaling** in Helm values
-6. **Use managed secrets** (Kubernetes Secrets, Vault)
-7. **Add authentication middleware** (OAuth, SSO)
+### API Testing with curl
+
+```bash
+# Health check
+curl http://localhost:5000/api/health
+
+# Register
+curl -X POST http://localhost:5000/api/register \
+  -H "Content-Type: application/json" \
+  -d '{"username":"testuser","email":"test@example.com","phone":"+12025551234","password":"password123"}'
+
+# Login
+curl -X POST http://localhost:5000/api/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"testuser","password":"password123"}'
+
+# Create ticket
+curl -X POST http://localhost:5000/api/tickets \
+  -H "Content-Type: application/json" \
+  -d '{"created_by_id":1,"assigned_to_id":2,"cable_type":"Cat6","cable_length":"100ft","cable_gauge":"23AWG","location":"Building A","priority":"medium"}'
+```
+
+### Test Checklist
+
+- [ ] Users can register and login
+- [ ] Tickets can be created with all fields
+- [ ] Notifications are sent (if configured)
+- [ ] Approval/rejection links work
+- [ ] Status updates work through full lifecycle
+- [ ] Dashboard shows correct stats
+- [ ] Filters work (All, Created by Me, Assigned to Me)
+- [ ] Responsive on mobile
 
 ## Project Structure
 
@@ -326,62 +239,65 @@ Key values in `helm-chart/values.yaml`:
 ticketing_app/
 ├── backend/
 │   ├── app/
-│   │   ├── __init__.py
-│   │   ├── models.py          # Database models
-│   │   ├── routes.py          # API endpoints
-│   │   └── notifications.py   # SMS/Email logic
+│   │   ├── __init__.py          # App factory + config
+│   │   ├── models.py            # SQLAlchemy models
+│   │   ├── routes.py            # API endpoints
+│   │   └── notifications.py     # SMS/Email logic
 │   ├── Dockerfile
 │   ├── requirements.txt
 │   └── run.py
 ├── frontend/
 │   ├── src/
-│   │   ├── components/        # React components
-│   │   ├── pages/            # Page components
+│   │   ├── components/          # LoginForm, RegisterForm, TicketForm, TicketList
+│   │   ├── pages/               # Dashboard, ApprovalPage
 │   │   ├── App.js
 │   │   └── index.js
 │   ├── Dockerfile
 │   ├── nginx.conf
 │   └── package.json
-├── helm-chart/
+├── helm-chart/                  # Kubernetes deployment
 │   ├── Chart.yaml
 │   ├── values.yaml
 │   └── templates/
-│       ├── deployment.yaml
-│       ├── service.yaml
-│       ├── ingress.yaml
-│       ├── secret.yaml
-│       └── configmap.yaml
+├── .do/app.yaml                 # DigitalOcean config
 ├── docker-compose.yml
-└── README.md
+├── DEPLOYMENT.md                # Deployment guides
+└── DEMO_GUIDE.md                # Demo & presentation materials
 ```
 
-## Contributing
+## Troubleshooting
 
-This project was built for CoreWeave deployment. Feel free to fork and customize for your needs!
+### Email not sending
+- Check Resend API key in `backend/.env`
+- Verify sender email is valid for your Resend plan (`onboarding@resend.dev` for free tier)
+- Free tier can only send to the account owner's email
+
+### SMS not sending
+- Check Twilio credentials in `backend/.env`
+- Verify phone numbers include country code (+1234567890)
+- Check Twilio account balance
+
+### Frontend can't reach backend
+- Check `APP_URL` environment variable
+- Verify backend is running: `curl http://localhost:5000/api/health`
+- Check nginx proxy config in `frontend/nginx.conf`
+
+### Database issues
+- For production, switch to PostgreSQL
+- Reset local DB: `docker-compose down -v && docker-compose up -d`
+
+## Production Recommendations
+
+1. Use PostgreSQL instead of SQLite
+2. Enable HTTPS via Ingress + cert-manager
+3. Add Celery + Redis for async notification sending
+4. Set up monitoring (Prometheus + Grafana)
+5. Use managed secrets (Kubernetes Secrets, Vault)
 
 ## License
 
-MIT License - feel free to use for personal or commercial projects.
-
-## Support
-
-For issues or questions:
-- Check the troubleshooting section
-- Review Docker logs: `docker-compose logs`
-- Review Kubernetes logs: `kubectl logs <pod-name>`
-
-## Roadmap
-
-- [ ] Add PostgreSQL support out of the box
-- [ ] Implement Celery for async notifications
-- [ ] Add file attachments to tickets
-- [ ] Real-time updates with WebSockets
-- [ ] Mobile app (React Native)
-- [ ] Ticket comments/chat
-- [ ] Advanced search and filtering
-- [ ] Export reports (PDF, Excel)
-- [ ] Integration with inventory systems
+MIT License
 
 ---
 
-**Built with ❤️ for CoreWeave deployment**
+**Maintainer:** Lamar Wells (lkennethwells@gmail.com)

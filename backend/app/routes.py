@@ -125,6 +125,25 @@ def update_ticket(ticket_id):
 
     return jsonify({'message': 'Ticket updated', 'ticket': ticket.to_dict()}), 200
 
+@api.route('/tickets/<int:ticket_id>', methods=['DELETE'])
+def delete_ticket(ticket_id):
+    """Delete a ticket"""
+    ticket = Ticket.query.get_or_404(ticket_id)
+
+    # Only the creator can delete
+    data = request.json or {}
+    user_id = data.get('user_id')
+    if user_id and ticket.created_by_id != user_id:
+        return jsonify({'error': 'Only the ticket creator can delete this ticket'}), 403
+
+    # Delete related notifications first (no cascade defined)
+    Notification.query.filter_by(ticket_id=ticket.id).delete()
+
+    db.session.delete(ticket)
+    db.session.commit()
+
+    return jsonify({'message': 'Ticket deleted'}), 200
+
 # ============= APPROVAL ROUTES (Token-based) =============
 
 @api.route('/tickets/<int:ticket_id>/approve/<token>', methods=['GET', 'POST'])

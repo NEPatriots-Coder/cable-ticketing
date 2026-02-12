@@ -88,8 +88,7 @@ def send_email(to_email, subject, html_content):
                 print(f"✅ Email sent via Resend: {response.status_code}")
                 return True
             else:
-                print(f"❌ Resend error: {response.status_code} - {response.text}")
-                return False
+                print(f"⚠️ Resend error: {response.status_code} - {response.text}, trying SendGrid...")
 
         # Fallback to SendGrid
         api_key = current_app.config.get('SENDGRID_API_KEY')

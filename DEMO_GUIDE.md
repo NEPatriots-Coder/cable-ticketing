@@ -1,59 +1,52 @@
-# 🎬 Stakeholder Demo Guide
+# Demo & Presentation Guide
+
+Everything you need to demo the Cable Ticketing System to stakeholders.
+
+---
 
 ## Quick Setup (5 minutes)
 
 ### 1. Start the Application
 ```bash
-cd /sessions/loving-exciting-heisenberg/mnt/ticketing_app
-./quick-start.sh
+cd ticketing_app
+docker-compose up --build
+# OR: ./quick-start.sh
 ```
+Wait for services to be running.
 
-Wait for: `✅ Services are running!`
-
-### 2. Open in Browser
+### 2. Open Browser
 Navigate to: **http://localhost:3000**
 
----
+### 3. Create Demo Users
 
-## 🎭 Demo Script (10 minutes)
+**User 1 - Alice (Technician):**
+- Username: `alice_tech`
+- Email: `alice@company.com`
+- Phone: `+12025551234`
+- Password: `demo123`
 
-### **Setup: Create Two Users**
+**User 2 - Bob (Inventory):**
+- Logout, then Register
+- Username: `bob_inventory`
+- Email: `bob@company.com`
+- Phone: `+12025555678`
+- Password: `demo123`
 
-**User 1 - Technician (Alice)**
-1. Click **Register**
-2. Fill in:
-   - Username: `alice_tech`
-   - Email: `alice@company.com`
-   - Phone: `+12025551234`
-   - Password: `demo123`
-3. Click **Register**
-
-**User 2 - Inventory Staff (Bob)**
-1. Logout (top right)
-2. Click **Register**
-3. Fill in:
-   - Username: `bob_inventory`
-   - Email: `bob@company.com`
-   - Phone: `+12025555678`
-   - Password: `demo123`
-4. Click **Register**
+Or seed users automatically:
+```bash
+docker compose exec backend python seed_users.py
+```
 
 ---
 
-## 📋 Demo Scenario: "Building A Cable Request"
+## Demo Script (10 minutes)
 
-### **Act 1: Alice Needs Cable (2 min)**
+### Act 1: Alice Needs Cable (2 min)
 
 **Login as Alice** (`alice_tech` / `demo123`)
 
-**Show the Dashboard:**
-- "This is our cable ticketing system"
-- "Here's the dashboard showing all ticket statistics"
-- "Notice: 0 tickets currently"
-
-**Create a Ticket:**
-1. Scroll to "Create New Cable Request"
-2. Fill out the form:
+1. Show the dashboard: "This is our cable ticketing system -- here's the dashboard with ticket statistics"
+2. Scroll to "Create New Cable Request" and fill out:
    - **Assign To:** Bob (bob_inventory)
    - **Priority:** High
    - **Cable Type:** Cat6
@@ -64,214 +57,198 @@ Navigate to: **http://localhost:3000**
 3. Click **Create Ticket**
 
 **Point out:**
-- ✅ Success message appears
-- ✅ Ticket appears in "Created by Me" section
-- ✅ Status: "pending approval"
-- ✅ Dashboard stats updated (1 total, 1 pending)
-- 📱 "In production, Bob would receive SMS + Email right now with approve/reject links"
+- Success message appears
+- Ticket shows in "Created by Me" with status "pending approval"
+- Dashboard stats updated
+- "In production, Bob receives SMS + Email right now with approve/reject links"
 
----
+### Act 2: Bob Approves (2 min)
 
-### **Act 2: Bob Receives & Approves (2 min)**
+**Logout and login as Bob** (`bob_inventory` / `demo123`)
 
-**Logout and Login as Bob** (`bob_inventory` / `demo123`)
+1. Click **"Assigned to Me"** filter
+2. Show the cable request from Alice
 
-**Show Bob's View:**
-- Click **"Assigned to Me"** filter
-- "Bob sees the cable request from Alice"
-- Show the ticket card with all details
-
-**Demo the Approval (Manual Method):**
-
-Since we're not using SMS/Email for this demo, get the approval link:
-
+**Get approval link** (if not using live notifications):
 ```bash
-# Open a terminal
 docker-compose exec backend python -c "
 from app import create_app, db
 from app.models import Ticket
 app = create_app()
 with app.app_context():
-    ticket = Ticket.query.first()
+    ticket = Ticket.query.order_by(Ticket.id.desc()).first()
     if ticket:
-        print(f'\nApproval URL to copy/paste:')
         print(f'http://localhost:3000/tickets/{ticket.id}/approve/{ticket.approval_token}')
 "
 ```
 
-**Approve the Ticket:**
-1. Copy the approval URL from terminal
-2. Paste into browser
-3. Show the approval page: ✅ "Request Approved!"
-4. Click "Go to Dashboard"
+3. Paste approval URL in browser -- show "Request Approved!"
+4. Status changes from "pending approval" to "approved"
 
-**Show Updated Ticket:**
-- Status changed from "pending approval" → "approved"
-- Dashboard stats updated
-- 📱 "Alice would receive notification of approval"
-
----
-
-### **Act 3: Bob Fulfills the Request (2 min)**
+### Act 3: Bob Fulfills (2 min)
 
 **As Bob (still logged in):**
+1. Click **"Start Work"** -- status changes to "in_progress"
+2. Click **"Mark Fulfilled"** -- status changes to "fulfilled"
+3. Show dashboard: 1 fulfilled ticket, full audit trail visible
 
-1. Find the approved ticket
-2. Click **"Start Work"** button
-   - Status changes to "in_progress"
-3. Click **"Mark Fulfilled"** button
-   - Status changes to "fulfilled"
-   - 📱 "Alice would get notification that cable is ready"
+### Act 4: Alice Sees Completion (1 min)
 
-**Show the completed workflow:**
-- Dashboard shows: 1 fulfilled ticket
-- Full audit trail visible
-- Timeline from creation → approval → fulfillment
+**Logout and login as Alice:**
+1. Click **"Created by Me"** filter
+2. Ticket status = "Fulfilled" -- Alice knows her cable is ready
 
 ---
 
-### **Act 4: Alice Sees Completion (1 min)**
+## Key Talking Points
 
-**Logout and Login as Alice:**
+### Problem It Solves
+- **Before:** Phone calls, emails, sticky notes, no tracking
+- **After:** Digital workflow, instant notifications, full audit trail
 
-1. View dashboard
-2. Click **"Created by Me"** filter
-3. Show the ticket: Status = "Fulfilled"
-4. "Alice knows her cable request is complete!"
+### Features
+1. Simple ticket creation (30 seconds)
+2. Instant SMS + Email notifications
+3. One-click approve/reject (no login needed from notification)
+4. Real-time dashboard with stats
+5. Complete tracking from creation to fulfillment
 
----
+### Technical Highlights
+- Fully containerized (Docker)
+- Kubernetes-ready (Helm chart included)
+- Deploys to CoreWeave or DigitalOcean
+- Mobile responsive
+- Secure token-based approvals
 
-## 🎯 Key Demo Points to Emphasize
+### Cost
+- **Development:** $0 (built in-house)
+- **Production:** $15-40/month
+  - CoreWeave: $10-30 (compute + storage)
+  - Twilio: $1 + ~$0.0075 per SMS
+  - SendGrid/Resend: Free tier available
 
-### **Problem It Solves:**
-❌ Before: Phone calls, emails, sticky notes, no tracking
-✅ After: Digital workflow, instant notifications, full audit trail
-
-### **Key Features:**
-1. **Simple Ticket Creation** - 30 seconds to submit request
-2. **Instant Notifications** - SMS + Email (production)
-3. **One-Click Approve/Reject** - No login needed from notification
-4. **Real-Time Dashboard** - See all tickets and stats
-5. **Full Tracking** - Complete history of every request
-
-### **Technical Highlights:**
-- 🐳 Fully containerized (Docker)
-- ☸️ Kubernetes-ready (Helm chart included)
-- 🚀 Deploys to CoreWeave cloud
-- 📱 Mobile responsive
-- 🔐 Secure token-based approvals
-- 💰 Cost-effective (~$15-40/month for production)
+### Elevator Pitch (30 seconds)
+"This is our cable ticketing system -- think Jira for cable management. Technicians submit requests in 30 seconds. Inventory staff get instant SMS and email with one-click approve or reject. Everything is tracked and works on any device. It's containerized and deploys to Kubernetes. Cost is under $40/month."
 
 ---
 
-## 📱 Production Notification Demo
+## Pre-Demo Checklist
 
-If you set up Twilio/SendGrid, show this:
+### 24 Hours Before
+- [ ] Start app and verify services run
+- [ ] Register test users (or run seed script)
+- [ ] Walk through full workflow: create ticket -> approve -> fulfill
+- [ ] Check dashboard stats and filters work
+- [ ] Test on mobile browser (responsive design)
 
-**SMS Example:**
+### 2 Hours Before
+- [ ] Restart services: `docker-compose restart`
+- [ ] Have terminal open with `docker-compose logs -f backend`
+- [ ] Have approval URL command copied and ready
+- [ ] Presentation file ready: `Cable_Ticketing_Stakeholder_Presentation.pptx`
+- [ ] Browser tabs ready: localhost:3000 (logged out) + empty tab for approval URL
+
+### Right Before (15 min)
+- [ ] `docker-compose ps` -- services running
+- [ ] `curl http://localhost:5000/api/health` -- backend healthy
+- [ ] Open http://localhost:3000 -- frontend loads
+- [ ] Mental rehearsal of the 4-act demo script
+
+### Emergency Backup
+```bash
+# Port conflict
+lsof -i :3000
+lsof -i :5000
+kill -9 [PID]
+
+# Fresh start
+docker-compose down -v
+docker-compose up -d
 ```
-Cable Request from alice_tech:
 
-Type: Cat6
-Length: 100ft
-Gauge: 23AWG
-Location: Building A, Floor 3, Server Room
-
-Approve: [link]
-Reject: [link]
-```
-
-**Email Example:**
-Show professional HTML email with:
-- Formatted ticket details
-- Big green "Approve" and red "Reject" buttons
-- Ticket metadata
+If the live demo fails: pivot to slide-based walkthrough with screenshots.
 
 ---
 
-## 🎤 Elevator Pitch (30 seconds)
+## Stakeholder Email Template
 
-"This is our cable ticketing system - think Jira for cable management. Technicians submit requests in 30 seconds. Inventory staff get instant SMS and email notifications with one-click approve or reject. Everything is tracked, audited, and works on any device. It's fully containerized and deploys to our CoreWeave Kubernetes cluster. Cost is under $40/month for our team size."
+### Full Version
+
+**Subject:** Cable Ticketing System - Demo & Implementation Proposal
+
+Hi [Team/Stakeholder Name],
+
+I'm excited to share a new **Cable Ticketing System** I've built to streamline our cable request workflow.
+
+**Problem:** Cable requests happen via phone/email with no tracking, leading to lost requests, manual follow-ups, and zero visibility.
+
+**Solution:** A web-based ticketing system where:
+1. Technicians submit cable requests (30 seconds)
+2. Inventory staff receive SMS + Email with one-click approve/reject
+3. System tracks everything from creation to fulfillment
+
+**Key Features:**
+- Instant notifications (SMS + Email)
+- Real-time dashboard
+- Mobile-friendly
+- Complete audit trail
+- Production-ready (Docker + Kubernetes)
+
+**Cost:** $15-40/month in production
+
+I'd love to show you a **live demo** (10 min) and discuss implementation. Can we schedule 30 minutes this week?
+
+Best regards,
+**Lamar Wells**
+
+### Short Version
+
+**Subject:** New Cable Ticketing System - Ready for Demo
+
+Hi Team,
+
+I built a **cable ticketing system** to replace our current phone/email process.
+
+**What it does:** Technicians submit requests via web form -> Inventory gets SMS/Email with approve/reject links -> System tracks everything.
+
+**Cost:** $15-40/month | **Status:** Production-ready
+
+**Next step:** 30-min demo + discussion?
+
+Thanks,
+Lamar
 
 ---
 
-## 💡 Common Stakeholder Questions
+## Common Stakeholder Questions
 
 **Q: How much does it cost?**
-A: ~$15-40/month in production (CoreWeave compute + Twilio SMS + SendGrid email)
+A: $15-40/month (CoreWeave $10-30, Twilio $1 + usage, Resend/SendGrid free tier)
 
-**Q: How long did it take to build?**
-A: MVP built in one sprint. Production-ready with Docker + Kubernetes deployment.
+**Q: How long to deploy?**
+A: 4 weeks (staging -> testing -> production -> training)
 
 **Q: Can it scale?**
-A: Yes - Kubernetes autoscaling, can handle 100+ users easily. Built for growth.
+A: Yes -- Kubernetes autoscaling, handles 100+ users easily.
 
 **Q: Is it secure?**
-A: Yes - password hashing, token-based approvals, Kubernetes secrets, environment variable config.
+A: Password hashing, token-based approvals, Kubernetes secrets, no hardcoded credentials.
 
 **Q: What if someone loses the notification?**
-A: They can log into the web app anytime. Dashboard shows all assigned tickets.
+A: They can log into the web dashboard anytime. Notifications are supplementary.
 
 **Q: Can we add more features?**
-A: Absolutely. Built with modular architecture. Easy to add attachments, comments, integrations, etc.
+A: Modular architecture -- easy to add attachments, comments, integrations.
 
-**Q: Why not use existing tools like Jira?**
-A:
-- Simpler - focused on one workflow
-- Cheaper - $40/month vs $100s/month
-- Customizable - we control everything
-- Learning opportunity - great for DevOps practice
+**Q: Why not use Jira/ServiceNow?**
+A: Simpler, cheaper ($40 vs $100s/month), focused on one workflow, fully customizable.
 
 ---
 
-## 📊 Success Metrics to Track
+## Post-Demo Actions
 
-After deployment, measure:
-- ⏱️ Average request-to-fulfillment time
-- 📈 Tickets per day/week
-- ✅ Approval rate (approved vs rejected)
-- 🎯 Response time (creation → approval)
-- 💬 User adoption rate
-
----
-
-## 🎥 Demo Tips
-
-1. **Practice first** - Run through the demo twice before presenting
-2. **Have terminal ready** - For showing approval URLs
-3. **Clear browser cache** - Fresh start
-4. **Screenshot important screens** - Backup if live demo fails
-5. **Have production screenshots** - Show SMS/Email examples even without live config
-6. **Prepare for questions** - Review the FAQ section above
-
----
-
-## 🚀 Next Steps After Demo
-
-If stakeholders approve:
-
-1. **Week 1:** Set up Twilio + SendGrid for production notifications
-2. **Week 2:** Deploy to CoreWeave staging environment
-3. **Week 3:** User testing with 5-10 team members
-4. **Week 4:** Production rollout
-
----
-
-## 📸 Screenshots to Prepare
-
-Take these screenshots for a slide deck:
-
-1. Login page
-2. Registration page
-3. Dashboard with stats
-4. Ticket creation form
-5. Ticket list with filters
-6. Approval page
-7. SMS notification (mock or real)
-8. Email notification (mock or real)
-9. Kubernetes deployment (kubectl get pods)
-10. Architecture diagram
-
----
-
-**Good luck with your demo! 🎉**
+- [ ] Send thank-you email with presentation attached
+- [ ] Share project access if requested
+- [ ] Schedule follow-up meeting
+- [ ] Document feedback and feature requests
+- [ ] Begin deployment if approved
