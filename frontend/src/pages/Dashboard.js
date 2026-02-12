@@ -63,7 +63,7 @@ function Dashboard({ user, onLogout }) {
 
       <div className="main-content">
         <TicketForm currentUser={user} onTicketCreated={handleTicketCreated} />
-        <TicketList currentUser={user} refreshTrigger={refreshTrigger} />
+        <TicketList currentUser={user} refreshTrigger={refreshTrigger} onTicketDeleted={fetchStats} />
       </div>
     </div>
   );

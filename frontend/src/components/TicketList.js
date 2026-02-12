@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from '../api/axiosinstance';
 
-function TicketList({ currentUser, refreshTrigger }) {
+function TicketList({ currentUser, refreshTrigger, onTicketDeleted }) {
   const [tickets, setTickets] = useState([]);
   const [filter, setFilter] = useState('all');
   const [loading, setLoading] = useState(true);
@@ -28,6 +28,18 @@ function TicketList({ currentUser, refreshTrigger }) {
     } catch (err) {
       console.error('Error updating ticket:', err);
       alert('Failed to update ticket status');
+    }
+  };
+
+  const handleDeleteTicket = async (ticketId) => {
+    if (!window.confirm('Are you sure you want to delete this ticket?')) return;
+    try {
+      await axios.delete(`/tickets/${ticketId}`, { data: { user_id: currentUser.id } });
+      fetchTickets();
+      if (onTicketDeleted) onTicketDeleted();
+    } catch (err) {
+      console.error('Error deleting ticket:', err);
+      alert('Failed to delete ticket');
     }
   };
 
@@ -179,6 +191,17 @@ function TicketList({ currentUser, refreshTrigger }) {
                 {ticket.rejection_reason && (
                   <div className="rejection-reason">
                     <strong>Rejection Reason:</strong> {ticket.rejection_reason}
+                  </div>
+                )}
+
+                {ticket.created_by.id === currentUser.id && (
+                  <div className="ticket-actions">
+                    <button
+                      className="btn-small btn-danger"
+                      onClick={() => handleDeleteTicket(ticket.id)}
+                    >
+                      Delete
+                    </button>
                   </div>
                 )}
               </div>
