@@ -10,11 +10,15 @@ function App() {
   const [user, setUser] = useState(null);
 
   useEffect(() => {
-    // Check if user is stored in localStorage
     const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
+    if (!storedUser) return;
+    const parsed = JSON.parse(storedUser);
+    // Validate the stored user still exists in the DB
+    import('./api/axiosinstance').then(({ default: axios }) => {
+      axios.get(`/users/${parsed.id}`)
+        .then(() => setUser(parsed))
+        .catch(() => localStorage.removeItem('user'));
+    });
   }, []);
 
   const handleLogin = (userData) => {

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import axios from '../api/axiosinstance';
 
+const newItem = () => ({ cable_type: '', cable_length: '', quantity: '' });
+
 const getInitialFormData = () => ({
   assigned_to_id: '',
-  cable_type: '',
-  cable_length: '',
-  cable_gauge: '',
+  items: [newItem()],
   location: '',
   notes: '',
   priority: 'medium'
@@ -21,21 +21,36 @@ function TicketForm({ currentUser, onTicketCreated }) {
     const fetchUsers = async () => {
       try {
         const response = await axios.get('/users');
-        // Show all users (including current user for testing)
         setUsers(response.data);
       } catch (err) {
         console.error('Error fetching users:', err);
       }
     };
-
     fetchUsers();
   }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleItemChange = (index, e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => {
+      const items = [...prev.items];
+      items[index] = { ...items[index], [name]: value };
+      return { ...prev, items };
+    });
+  };
+
+  const addItem = () => {
+    setFormData((prev) => ({ ...prev, items: [...prev.items, newItem()] }));
+  };
+
+  const removeItem = (index) => {
     setFormData((prev) => ({
       ...prev,
-      [name]: value
+      items: prev.items.filter((_, i) => i !== index)
     }));
   };
 
@@ -101,42 +116,54 @@ function TicketForm({ currentUser, onTicketCreated }) {
           </div>
         </div>
 
-        <div className="form-row">
-          <div className="form-group">
-            <label>Cable Type *</label>
-            <input
-              type="text"
-              name="cable_type"
-              value={formData.cable_type}
-              onChange={handleChange}
-              placeholder="e.g., Cat6, Cat6a, Fiber"
-              required
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Length *</label>
-            <input
-              type="text"
-              name="cable_length"
-              value={formData.cable_length}
-              onChange={handleChange}
-              placeholder="e.g., 100ft, 50m"
-              required
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Gauge *</label>
-            <input
-              type="text"
-              name="cable_gauge"
-              value={formData.cable_gauge}
-              onChange={handleChange}
-              placeholder="e.g., 23AWG, 24AWG"
-              required
-            />
-          </div>
+        <div className="form-group">
+          <label>Items *</label>
+          {formData.items.map((item, index) => (
+            <div key={index} className="form-row item-row">
+              <div className="form-group">
+                <input
+                  type="text"
+                  name="cable_type"
+                  value={item.cable_type}
+                  onChange={(e) => handleItemChange(index, e)}
+                  placeholder="Cable Type (e.g., Cat6)"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <input
+                  type="text"
+                  name="cable_length"
+                  value={item.cable_length}
+                  onChange={(e) => handleItemChange(index, e)}
+                  placeholder="Length (e.g., 100ft)"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <input
+                  type="text"
+                  name="quantity"
+                  value={item.quantity}
+                  onChange={(e) => handleItemChange(index, e)}
+                  placeholder="Quantity"
+                  required
+                />
+              </div>
+              {formData.items.length > 1 && (
+                <button
+                  type="button"
+                  className="btn-small btn-danger"
+                  onClick={() => removeItem(index)}
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          ))}
+          <button type="button" className="btn-secondary" onClick={addItem}>
+            + Add Item
+          </button>
         </div>
 
         <div className="form-group">

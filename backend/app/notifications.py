@@ -3,7 +3,7 @@ from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 from datetime import datetime
 from flask import current_app
-from app.models import Notification, db
+from app.models import Notification
 import requests
 import boto3
 from botocore.exceptions import ClientError
@@ -123,12 +123,14 @@ def notify_ticket_created(ticket):
     reject_url = f"{app_url}/api/tickets/{ticket.id}/reject/{ticket.approval_token}"
 
     # SMS message
+    items_sms = "\n".join(
+        f"Item {i+1}: {item['cable_type']} | {item['cable_length']} | Qty: {item['quantity']}"
+        for i, item in enumerate(ticket.items)
+    )
     sms_message = f"""
 Cable Request from {ticket.creator.username}:
 
-Type: {ticket.cable_type}
-Length: {ticket.cable_length}
-Gauge: {ticket.cable_gauge}
+{items_sms}
 Location: {ticket.location or 'N/A'}
 
 Approve: {approve_url}
@@ -145,9 +147,7 @@ Reject: {reject_url}
         <p><strong>From:</strong> {ticket.creator.username}</p>
 
         <div style="background-color: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0;">
-            <p><strong>Cable Type:</strong> {ticket.cable_type}</p>
-            <p><strong>Length:</strong> {ticket.cable_length}</p>
-            <p><strong>Gauge:</strong> {ticket.cable_gauge}</p>
+            {''.join(f"<p><strong>Item {i+1}:</strong> {item['cable_type']} | {item['cable_length']} | Qty: {item['quantity']}</p>" for i, item in enumerate(ticket.items))}
             <p><strong>Location:</strong> {ticket.location or 'N/A'}</p>
             <p><strong>Notes:</strong> {ticket.notes or 'None'}</p>
         </div>
@@ -174,28 +174,24 @@ Reject: {reject_url}
     # Send SMS
     sms_sent = send_sms(assignee.phone, sms_message)
     if sms_sent:
-        notif = Notification(
+        Notification.create(
             ticket_id=ticket.id,
             recipient_user_id=assignee.id,
             notification_type='sms',
             status='sent',
             sent_at=datetime.utcnow()
         )
-        db.session.add(notif)
 
     # Send Email
     email_sent = send_email(assignee.email, f"Cable Request #{ticket.id}", email_html)
     if email_sent:
-        notif = Notification(
+        Notification.create(
             ticket_id=ticket.id,
             recipient_user_id=assignee.id,
             notification_type='email',
             status='sent',
             sent_at=datetime.utcnow()
         )
-        db.session.add(notif)
-
-    db.session.commit()
 
 def notify_status_change(ticket, new_status):
     """Send notification when ticket status changes"""

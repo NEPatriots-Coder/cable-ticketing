@@ -1,19 +1,31 @@
 from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from flask_login import LoginManager
+from pymongo import ASCENDING, MongoClient
+from dotenv import load_dotenv
 import os
 
-db = SQLAlchemy()
+load_dotenv()
+
 login_manager = LoginManager()
+mongo_client = None
+mongo_db = None
+
+
+def get_db():
+    if mongo_db is None:
+        raise RuntimeError("MongoDB is not initialized")
+    return mongo_db
 
 def create_app():
+    global mongo_client, mongo_db
+
     app = Flask(__name__)
 
     # Configuration
     app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///ticketing.db')
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    app.config['MONGO_URI'] = os.getenv('MONGO_URI', 'mongodb://localhost:27017')
+    app.config['MONGO_DB_NAME'] = os.getenv('MONGO_DB_NAME', 'ticketing')
 
     # Twilio Configuration
     app.config['TWILIO_ACCOUNT_SID'] = os.getenv('TWILIO_ACCOUNT_SID')
@@ -33,8 +45,18 @@ def create_app():
     # App URL for notification links
     app.config['APP_URL'] = os.getenv('APP_URL', 'http://localhost:3000')
 
-    # Initialize extensions
-    db.init_app(app)
+    # Initialize MongoDB connection and indexes
+    mongo_client = MongoClient(app.config['MONGO_URI'])
+    mongo_db = mongo_client[app.config['MONGO_DB_NAME']]
+    mongo_db.users.create_index([("id", ASCENDING)], unique=True)
+    mongo_db.users.create_index([("username", ASCENDING)], unique=True)
+    mongo_db.users.create_index([("email", ASCENDING)], unique=True)
+    mongo_db.tickets.create_index([("id", ASCENDING)], unique=True)
+    mongo_db.tickets.create_index([("approval_token", ASCENDING)], unique=True)
+    mongo_db.notifications.create_index([("id", ASCENDING)], unique=True)
+    mongo_db.notifications.create_index([("ticket_id", ASCENDING)])
+    mongo_db.notifications.create_index([("recipient_user_id", ASCENDING)])
+
     CORS(app)
     login_manager.init_app(app)
 
@@ -42,17 +64,7 @@ def create_app():
     from app.routes import api
     app.register_blueprint(api, url_prefix='/api')
 
-    # Create tables (only if they don't exist)
     with app.app_context():
-        try:
-            # Import models to register them
-            from app import models
-
-            # Create tables if they don't exist
-            db.create_all()
-            print("✅ Database tables initialized successfully")
-        except Exception as e:
-            print(f"⚠️  Database initialization note: {e}")
-            # Tables likely already exist, continue anyway
+        print("✅ MongoDB initialized successfully")
 
     return app

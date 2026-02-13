@@ -133,15 +133,11 @@ function TicketList({ currentUser, refreshTrigger, onTicketDeleted }) {
               </div>
 
               <div className="ticket-body">
-                <div className="ticket-spec">
-                  <strong>Type:</strong> {ticket.cable_type}
-                </div>
-                <div className="ticket-spec">
-                  <strong>Length:</strong> {ticket.cable_length}
-                </div>
-                <div className="ticket-spec">
-                  <strong>Gauge:</strong> {ticket.cable_gauge}
-                </div>
+                {(ticket.items || []).map((item, i) => (
+                  <div key={i} className="ticket-spec">
+                    <strong>Item {i + 1}:</strong> {item.cable_type} | {item.cable_length} | Qty: {item.quantity}
+                  </div>
+                ))}
                 {ticket.location && (
                   <div className="ticket-spec">
                     <strong>Location:</strong> {ticket.location}

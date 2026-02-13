@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Seed the database with demo users for testing"""
 
-from app import create_app, db
+from app import create_app
 from app.models import User
 from werkzeug.security import generate_password_hash
 
@@ -36,23 +36,20 @@ with app.app_context():
 
     for user_data in demo_users:
         # Check if user already exists
-        existing = User.query.filter_by(username=user_data['username']).first()
+        existing = User.find_by_username_or_email(user_data['username'], user_data['email'])
         if existing:
             print(f"  ⏭️  {user_data['username']} already exists, skipping")
             continue
 
         # Create new user
-        user = User(
+        User.create(
             username=user_data['username'],
             email=user_data['email'],
             phone=user_data['phone'],
             password_hash=generate_password_hash(user_data['password']),
             role=user_data['role']
         )
-        db.session.add(user)
         print(f"  ✅ Created {user_data['username']} ({user_data['email']})")
-
-    db.session.commit()
     print("\n✨ Done! Demo users created.")
     print("\nLogin credentials (all use password: demo123):")
     for user_data in demo_users:

@@ -115,15 +115,11 @@ function ApprovalPage({ action }) {
             <div className="detail-row">
               <strong>Ticket ID:</strong> #{ticket.id}
             </div>
-            <div className="detail-row">
-              <strong>Cable Type:</strong> {ticket.cable_type}
-            </div>
-            <div className="detail-row">
-              <strong>Length:</strong> {ticket.cable_length}
-            </div>
-            <div className="detail-row">
-              <strong>Gauge:</strong> {ticket.cable_gauge}
-            </div>
+            {(ticket.items || []).map((item, i) => (
+              <div key={i} className="detail-row">
+                <strong>Item {i + 1}:</strong> {item.cable_type} | {item.cable_length} | Qty: {item.quantity}
+              </div>
+            ))}
             <div className="detail-row">
               <strong>Status:</strong> {ticket.status}
             </div>
