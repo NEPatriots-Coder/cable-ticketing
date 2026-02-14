@@ -6,6 +6,7 @@ Existing demo users are updated in place so credentials remain deterministic.
 
 from app import create_app
 from app.models import User
+from pymongo.errors import DuplicateKeyError
 from werkzeug.security import generate_password_hash
 
 app = create_app()
@@ -38,10 +39,10 @@ demo_users = [
     {
         'username': 'myriad_user',
         'email': 'myriad_user@coreweave.com',
-        'phone': '+12025555678',
+        'phone': '+12025555679',
         'password': 'cable123',
         'role': 'user'
-    }
+    },
 ]
 
 with app.app_context():
@@ -59,29 +60,37 @@ with app.app_context():
                 print(f"  ⏭️  {user_data['username']} already exists, skipping")
                 continue
 
-            User._collection().update_one(
-                {"id": existing.id},
-                {
-                    "$set": {
-                        "username": user_data["username"],
-                        "email": user_data["email"],
-                        "phone": user_data["phone"],
-                        "role": user_data["role"],
-                        "password_hash": generate_password_hash(user_data["password"]),
-                    }
-                },
-            )
+            try:
+                User._collection().update_one(
+                    {"id": existing.id},
+                    {
+                        "$set": {
+                            "username": user_data["username"],
+                            "email": user_data["email"],
+                            "phone": user_data["phone"],
+                            "role": user_data["role"],
+                            "password_hash": generate_password_hash(user_data["password"]),
+                        }
+                    },
+                )
+            except DuplicateKeyError as exc:
+                print(f"  ❌ Failed to update {user_data['username']}: {exc.details}")
+                continue
             print(f"  🔁 Updated {user_data['username']} ({user_data['email']})")
             continue
 
         # Create new user
-        User.create(
-            username=user_data['username'],
-            email=user_data['email'],
-            phone=user_data['phone'],
-            password_hash=generate_password_hash(user_data['password']),
-            role=user_data['role']
-        )
+        try:
+            User.create(
+                username=user_data['username'],
+                email=user_data['email'],
+                phone=user_data['phone'],
+                password_hash=generate_password_hash(user_data['password']),
+                role=user_data['role']
+            )
+        except DuplicateKeyError as exc:
+            print(f"  ❌ Failed to create {user_data['username']}: {exc.details}")
+            continue
         print(f"  ✅ Created {user_data['username']} ({user_data['email']})")
     print("\n✨ Done! Demo users created.")
     print("\nLogin credentials:")
