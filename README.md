@@ -158,6 +158,12 @@ Create Ticket → Pending Approval → Approved/Rejected → In Progress → Ful
 - `GET /api/dashboard/stats` - Get statistics
 - `GET /api/health` - Health check
 
+### Inventory (New)
+- `POST /api/cable-receiving` - Record inbound cable inventory (admin)
+- `GET /api/cable-receiving` - List receiving records
+- `GET /api/inventory/movements` - List inventory ledger movements
+- `GET /api/inventory/on-hand` - View on-hand quantity by cable type/length
+
 ## Database Schema
 
 ### Users

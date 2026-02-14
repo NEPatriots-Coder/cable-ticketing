@@ -32,25 +32,30 @@ function TicketList({ currentUser, refreshTrigger, onTicketDeleted }) {
   };
 
   const handleDeleteTicket = async (ticketId) => {
-    if (!window.confirm('Are you sure you want to delete this ticket?')) return;
+    if (!window.confirm('Archive this ticket? It will be hidden from the default ticket list.')) return;
     try {
       await axios.delete(`/tickets/${ticketId}`, { data: { user_id: currentUser.id } });
       fetchTickets();
       if (onTicketDeleted) onTicketDeleted();
     } catch (err) {
       console.error('Error deleting ticket:', err);
-      alert('Failed to delete ticket');
+      alert('Failed to archive ticket');
     }
   };
 
+  const visibleTickets = useMemo(
+    () => tickets.filter((t) => t.status !== 'deleted'),
+    [tickets]
+  );
+
   const createdTickets = useMemo(
-    () => tickets.filter((t) => t.created_by.id === currentUser.id),
-    [tickets, currentUser.id]
+    () => visibleTickets.filter((t) => t.created_by.id === currentUser.id),
+    [visibleTickets, currentUser.id]
   );
 
   const assignedTickets = useMemo(
-    () => tickets.filter((t) => t.assigned_to.id === currentUser.id),
-    [tickets, currentUser.id]
+    () => visibleTickets.filter((t) => t.assigned_to.id === currentUser.id),
+    [visibleTickets, currentUser.id]
   );
 
   const filteredTickets = useMemo(() => {
@@ -60,8 +65,8 @@ function TicketList({ currentUser, refreshTrigger, onTicketDeleted }) {
     if (filter === 'assigned') {
       return assignedTickets;
     }
-    return tickets;
-  }, [filter, tickets, createdTickets, assignedTickets]);
+    return visibleTickets;
+  }, [filter, visibleTickets, createdTickets, assignedTickets]);
 
   const getStatusBadgeClass = (status) => {
     const classes = {
@@ -97,7 +102,7 @@ function TicketList({ currentUser, refreshTrigger, onTicketDeleted }) {
             className={filter === 'all' ? 'active' : ''}
             onClick={() => setFilter('all')}
           >
-            All ({tickets.length})
+            All ({visibleTickets.length})
           </button>
           <button
             className={filter === 'created' ? 'active' : ''}
@@ -196,7 +201,7 @@ function TicketList({ currentUser, refreshTrigger, onTicketDeleted }) {
                       className="btn-small btn-danger"
                       onClick={() => handleDeleteTicket(ticket.id)}
                     >
-                      Delete
+                      Archive
                     </button>
                   </div>
                 )}
