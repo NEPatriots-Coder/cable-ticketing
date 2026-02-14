@@ -1,7 +1,7 @@
 from twilio.rest import Client
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import current_app
 from app.models import Notification
 import requests
@@ -179,7 +179,7 @@ Reject: {reject_url}
             recipient_user_id=assignee.id,
             notification_type='sms',
             status='sent',
-            sent_at=datetime.utcnow()
+            sent_at=datetime.now(timezone.utc)
         )
 
     # Send Email
@@ -190,7 +190,7 @@ Reject: {reject_url}
             recipient_user_id=assignee.id,
             notification_type='email',
             status='sent',
-            sent_at=datetime.utcnow()
+            sent_at=datetime.now(timezone.utc)
         )
 
 def notify_status_change(ticket, new_status):

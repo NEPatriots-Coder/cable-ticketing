@@ -1,10 +1,73 @@
-from flask import Blueprint, request, jsonify
-from app.models import User, Ticket, Notification
+from flask import Blueprint, current_app, request, jsonify
+from app.models import User, Ticket, Notification, CableReceipt, InventoryMovement
 from app.notifications import notify_ticket_created, notify_status_change
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
+from datetime import datetime, timezone
 
 api = Blueprint('api', __name__)
+
+ALLOWED_STATUSES = {
+    'pending_approval',
+    'approved',
+    'rejected',
+    'in_progress',
+    'fulfilled',
+    'closed',
+}
+STATUS_TRANSITIONS = {
+    'pending_approval': {'approved', 'rejected'},
+    'approved': {'in_progress', 'closed'},
+    'rejected': {'closed'},
+    'in_progress': {'fulfilled', 'closed'},
+    'fulfilled': {'closed'},
+    'closed': set(),
+}
+
+
+def _require_actor():
+    data = request.json or {}
+    raw_user_id = data.get('user_id')
+    if raw_user_id is None:
+        return None, jsonify({'error': 'user_id is required'}), 400
+    try:
+        user_id = int(raw_user_id)
+    except (TypeError, ValueError):
+        return None, jsonify({'error': 'user_id must be an integer'}), 400
+
+    user = User.get(user_id)
+    if not user:
+        return None, jsonify({'error': 'User not found'}), 404
+    return user, None, None
+
+
+def _validate_inventory_items(items):
+    if not isinstance(items, list) or len(items) == 0:
+        return None, 'items must be a non-empty list'
+
+    normalized = []
+    for item in items:
+        cable_type = (item.get('cable_type') or '').strip()
+        cable_length = (item.get('cable_length') or '').strip()
+        quantity_raw = item.get('quantity')
+
+        if not cable_type or not cable_length:
+            return None, 'Each item requires cable_type and cable_length'
+        try:
+            quantity = int(quantity_raw)
+        except (TypeError, ValueError):
+            return None, 'Each item quantity must be an integer'
+        if quantity <= 0:
+            return None, 'Each item quantity must be greater than zero'
+
+        normalized.append(
+            {
+                'cable_type': cable_type,
+                'cable_length': cable_length,
+                'quantity': quantity,
+            }
+        )
+
+    return normalized, None
 
 # ============= AUTH ROUTES =============
 
@@ -68,7 +131,8 @@ def get_user(user_id):
 @api.route('/tickets', methods=['GET'])
 def get_tickets():
     """Get all tickets"""
-    tickets = Ticket.all()
+    include_deleted = request.args.get('include_deleted') == 'true'
+    tickets = Ticket.all(include_deleted=include_deleted)
     return jsonify([ticket.to_dict() for ticket in tickets]), 200
 
 @api.route('/tickets/<int:ticket_id>', methods=['GET'])
@@ -77,6 +141,9 @@ def get_ticket(ticket_id):
     ticket = Ticket.get(ticket_id)
     if not ticket:
         return jsonify({'error': 'Ticket not found'}), 404
+    include_deleted = request.args.get('include_deleted') == 'true'
+    if ticket.status == 'deleted' and not include_deleted:
+        return jsonify({'error': 'Ticket was deleted'}), 410
     return jsonify(ticket.to_dict()), 200
 
 @api.route('/tickets', methods=['POST'])
@@ -127,16 +194,49 @@ def update_ticket(ticket_id):
     ticket = Ticket.get(ticket_id)
     if not ticket:
         return jsonify({'error': 'Ticket not found'}), 404
+    if ticket.status == 'deleted':
+        return jsonify({'error': 'Ticket was deleted'}), 410
     data = request.json or {}
 
     old_status = ticket.status
     updates = {}
     if 'status' in data:
-        updates['status'] = data['status']
+        new_status = data['status']
+        if new_status not in ALLOWED_STATUSES:
+            return jsonify({'error': f'Invalid status: {new_status}'}), 400
+        if new_status != old_status and new_status not in STATUS_TRANSITIONS.get(old_status, set()):
+            return jsonify({'error': f'Invalid status transition: {old_status} -> {new_status}'}), 409
+        updates['status'] = new_status
     if 'rejection_reason' in data:
         updates['rejection_reason'] = data['rejection_reason']
 
     ticket = Ticket.update_fields(ticket_id, updates) if updates else ticket
+
+    if old_status != ticket.status and ticket.status == 'fulfilled':
+        if not InventoryMovement.exists_for_source('ticket_fulfillment', ticket.id):
+            movement_docs = []
+            for item in ticket.items:
+                cable_type = (item.get('cable_type') or '').strip()
+                cable_length = (item.get('cable_length') or '').strip()
+                try:
+                    quantity = int(item.get('quantity', 0))
+                except (TypeError, ValueError):
+                    continue
+                if not cable_type or not cable_length or quantity <= 0:
+                    continue
+                movement_docs.append(
+                    {
+                        'movement_type': 'consumption',
+                        'source_type': 'ticket_fulfillment',
+                        'source_id': ticket.id,
+                        'actor_user_id': ticket.assigned_to_id,
+                        'cable_type': cable_type,
+                        'cable_length': cable_length,
+                        'quantity_delta': -quantity,
+                        'notes': f'Ticket #{ticket.id} fulfilled',
+                    }
+                )
+            InventoryMovement.create_many(movement_docs)
 
     # Notify if status changed significantly
     if old_status != ticket.status and ticket.status in ['approved', 'rejected', 'fulfilled']:
@@ -146,21 +246,157 @@ def update_ticket(ticket_id):
 
 @api.route('/tickets/<int:ticket_id>', methods=['DELETE'])
 def delete_ticket(ticket_id):
-    """Delete a ticket"""
+    """Soft-delete a ticket"""
     ticket = Ticket.get(ticket_id)
     if not ticket:
         return jsonify({'error': 'Ticket not found'}), 404
 
-    # Only the creator can delete
-    data = request.json or {}
-    user_id = data.get('user_id')
-    if user_id and ticket.created_by_id != user_id:
-        return jsonify({'error': 'Only the ticket creator can delete this ticket'}), 403
+    actor, error_response, status_code = _require_actor()
+    if error_response:
+        return error_response, status_code
+    if ticket.created_by_id != actor.id and actor.role != 'admin':
+        return jsonify({'error': 'Only the ticket creator or admin can delete this ticket'}), 403
+
+    res = Ticket.soft_delete(
+        ticket.id,
+        deleted_by_id=actor.id,
+        previous_status=ticket.status,
+    )
+    if res.matched_count == 0:
+        return jsonify({'error': 'Ticket was already deleted'}), 410
+
+    current_app.logger.info('ticket_archived ticket_id=%s actor_id=%s', ticket.id, actor.id)
+    return jsonify({'message': 'Ticket archived', 'status': 'deleted'}), 200
+
+
+@api.route('/tickets/<int:ticket_id>/restore', methods=['POST'])
+def restore_ticket(ticket_id):
+    """Restore a soft-deleted ticket"""
+    ticket = Ticket.get(ticket_id)
+    if not ticket:
+        return jsonify({'error': 'Ticket not found'}), 404
+
+    actor, error_response, status_code = _require_actor()
+    if error_response:
+        return error_response, status_code
+    if ticket.created_by_id != actor.id and actor.role != 'admin':
+        return jsonify({'error': 'Only the ticket creator or admin can restore this ticket'}), 403
+    if ticket.status != 'deleted':
+        return jsonify({'error': 'Ticket is not deleted'}), 409
+
+    restored = Ticket.restore(ticket.id)
+    current_app.logger.info('ticket_restored ticket_id=%s actor_id=%s', ticket.id, actor.id)
+    return jsonify({'message': 'Ticket restored', 'ticket': restored.to_dict()}), 200
+
+
+@api.route('/tickets/<int:ticket_id>/purge', methods=['DELETE'])
+def purge_ticket(ticket_id):
+    """Permanently delete a soft-deleted ticket (admin only)"""
+    ticket = Ticket.get(ticket_id)
+    if not ticket:
+        return jsonify({'error': 'Ticket not found'}), 404
+
+    actor, error_response, status_code = _require_actor()
+    if error_response:
+        return error_response, status_code
+    if actor.role != 'admin':
+        return jsonify({'error': 'Only admins can permanently delete tickets'}), 403
+    if ticket.status != 'deleted':
+        return jsonify({'error': 'Ticket must be archived before purge'}), 409
 
     Notification.delete_by_ticket_id(ticket.id)
-    Ticket.delete(ticket.id)
+    Ticket.hard_delete(ticket.id)
+    current_app.logger.info('ticket_purged ticket_id=%s actor_id=%s', ticket.id, actor.id)
+    return jsonify({'message': 'Ticket permanently deleted'}), 200
 
-    return jsonify({'message': 'Ticket deleted'}), 200
+
+# ============= INVENTORY ROUTES =============
+
+@api.route('/cable-receiving', methods=['POST'])
+def create_cable_receiving():
+    """Record received cable inventory and create positive stock movements"""
+    actor, error_response, status_code = _require_actor()
+    if error_response:
+        return error_response, status_code
+    if actor.role != 'admin':
+        return jsonify({'error': 'Only admins can record cable receiving'}), 403
+
+    data = request.json or {}
+    items, validation_error = _validate_inventory_items(data.get('items'))
+    if validation_error:
+        return jsonify({'error': validation_error}), 400
+
+    receipt = CableReceipt.create(
+        received_by_id=actor.id,
+        items=items,
+        vendor=data.get('vendor'),
+        po_number=data.get('po_number'),
+        notes=data.get('notes'),
+    )
+
+    movement_docs = [
+        {
+            'movement_type': 'receipt',
+            'source_type': 'cable_receiving',
+            'source_id': receipt.id,
+            'actor_user_id': actor.id,
+            'cable_type': item['cable_type'],
+            'cable_length': item['cable_length'],
+            'quantity_delta': int(item['quantity']),
+            'notes': f'Cable receipt #{receipt.id}',
+        }
+        for item in receipt.items
+    ]
+    InventoryMovement.create_many(movement_docs)
+    current_app.logger.info('cable_receiving_created receipt_id=%s actor_id=%s', receipt.id, actor.id)
+
+    return jsonify({'message': 'Cable receiving recorded', 'receipt': receipt.to_dict()}), 201
+
+
+@api.route('/cable-receiving', methods=['GET'])
+def list_cable_receiving():
+    """List cable receiving records"""
+    receipts = CableReceipt.all()
+    return jsonify([receipt.to_dict() for receipt in receipts]), 200
+
+
+@api.route('/inventory/movements', methods=['GET'])
+def list_inventory_movements():
+    """List inventory movement ledger entries"""
+    source_type = request.args.get('source_type')
+    movement_type = request.args.get('movement_type')
+    source_id_raw = request.args.get('source_id')
+    limit_raw = request.args.get('limit') or '200'
+
+    source_id = None
+    if source_id_raw is not None:
+        try:
+            source_id = int(source_id_raw)
+        except ValueError:
+            return jsonify({'error': 'source_id must be an integer'}), 400
+    try:
+        limit = int(limit_raw)
+    except ValueError:
+        return jsonify({'error': 'limit must be an integer'}), 400
+
+    limit = max(1, min(limit, 1000))
+    movements = InventoryMovement.list(
+        movement_type=movement_type,
+        source_type=source_type,
+        source_id=source_id,
+        limit=limit,
+    )
+    return jsonify([movement.to_dict() for movement in movements]), 200
+
+
+@api.route('/inventory/on-hand', methods=['GET'])
+def inventory_on_hand():
+    """Get on-hand inventory grouped by cable type and length"""
+    include_zero = request.args.get('include_zero') == 'true'
+    summary = InventoryMovement.summary_on_hand()
+    if not include_zero:
+        summary = [row for row in summary if row.get('on_hand', 0) != 0]
+    return jsonify(summary), 200
 
 # ============= APPROVAL ROUTES (Token-based) =============
 
@@ -173,6 +409,9 @@ def approve_ticket(ticket_id, token):
 
     if ticket.approval_token != token:
         return jsonify({'error': 'Invalid token'}), 403
+
+    if ticket.status == 'deleted':
+        return jsonify({'error': 'Ticket was deleted'}), 410
 
     if ticket.status != 'pending_approval':
         return jsonify({'message': 'Ticket already processed', 'status': ticket.status}), 200
@@ -196,6 +435,9 @@ def reject_ticket(ticket_id, token):
 
     if ticket.approval_token != token:
         return jsonify({'error': 'Invalid token'}), 403
+
+    if ticket.status == 'deleted':
+        return jsonify({'error': 'Ticket was deleted'}), 410
 
     if ticket.status != 'pending_approval':
         return jsonify({'message': 'Ticket already processed', 'status': ticket.status}), 200
@@ -229,13 +471,15 @@ def get_dashboard_stats():
     approved = Ticket.count_by_status('approved')
     rejected = Ticket.count_by_status('rejected')
     fulfilled = Ticket.count_by_status('fulfilled')
+    archived = Ticket.count_by_status('deleted')
 
     return jsonify({
         'total_tickets': total_tickets,
         'pending_approval': pending,
         'approved': approved,
         'rejected': rejected,
-        'fulfilled': fulfilled
+        'fulfilled': fulfilled,
+        'archived': archived,
     }), 200
 
 # ============= HEALTH CHECK =============
@@ -243,4 +487,4 @@ def get_dashboard_stats():
 @api.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
-    return jsonify({'status': 'healthy', 'timestamp': datetime.utcnow().isoformat()}), 200
+    return jsonify({'status': 'healthy', 'timestamp': datetime.now(timezone.utc).isoformat()}), 200

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import secrets
 
 from flask_login import UserMixin
@@ -59,7 +59,7 @@ class User(UserMixin):
 
     @classmethod
     def create(cls, username, email, phone, password_hash, role="user"):
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         doc = {
             "id": _next_sequence("users"),
             "username": username,
@@ -112,6 +112,9 @@ class Ticket:
         self.priority = doc.get("priority", "medium")
         self.approval_token = doc["approval_token"]
         self.rejection_reason = doc.get("rejection_reason")
+        self.deleted_at = doc.get("deleted_at")
+        self.deleted_by_id = doc.get("deleted_by_id")
+        self.deleted_previous_status = doc.get("deleted_previous_status")
         self.created_at = doc.get("created_at")
         self.updated_at = doc.get("updated_at")
 
@@ -136,6 +139,9 @@ class Ticket:
             "notes": self.notes,
             "priority": self.priority,
             "rejection_reason": self.rejection_reason,
+            "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
+            "deleted_by_id": self.deleted_by_id,
+            "deleted_previous_status": self.deleted_previous_status,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -158,7 +164,7 @@ class Ticket:
         notes=None,
         priority="medium",
     ):
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         doc = {
             "id": _next_sequence("tickets"),
             "created_by_id": created_by_id,
@@ -170,6 +176,9 @@ class Ticket:
             "priority": priority,
             "approval_token": secrets.token_urlsafe(32),
             "rejection_reason": None,
+            "deleted_at": None,
+            "deleted_by_id": None,
+            "deleted_previous_status": None,
             "created_at": now,
             "updated_at": now,
         }
@@ -181,22 +190,59 @@ class Ticket:
         return cls._from_doc(cls._collection().find_one({"id": ticket_id}))
 
     @classmethod
-    def all(cls):
-        return [cls(doc) for doc in cls._collection().find().sort("created_at", -1)]
+    def all(cls, include_deleted=False):
+        query = {} if include_deleted else {"status": {"$ne": "deleted"}}
+        return [cls(doc) for doc in cls._collection().find(query).sort("created_at", -1)]
 
     @classmethod
     def update_fields(cls, ticket_id, updates):
-        updates["updated_at"] = datetime.utcnow()
+        updates["updated_at"] = datetime.now(timezone.utc)
         cls._collection().update_one({"id": ticket_id}, {"$set": updates})
         return cls.get(ticket_id)
 
     @classmethod
-    def delete(cls, ticket_id):
-        cls._collection().delete_one({"id": ticket_id})
+    def soft_delete(cls, ticket_id, deleted_by_id=None, previous_status=None):
+        updates = {
+            "status": "deleted",
+            "deleted_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+            "deleted_previous_status": previous_status,
+        }
+        if deleted_by_id is not None:
+            updates["deleted_by_id"] = deleted_by_id
+        return cls._collection().update_one(
+            {"id": ticket_id, "status": {"$ne": "deleted"}},
+            {"$set": updates},
+        )
 
     @classmethod
-    def count_all(cls):
-        return cls._collection().count_documents({})
+    def restore(cls, ticket_id):
+        existing = cls._collection().find_one({"id": ticket_id})
+        if not existing:
+            return None
+        restore_status = existing.get("deleted_previous_status") or "pending_approval"
+        cls._collection().update_one(
+            {"id": ticket_id, "status": "deleted"},
+            {
+                "$set": {
+                    "status": restore_status,
+                    "updated_at": datetime.now(timezone.utc),
+                    "deleted_at": None,
+                    "deleted_by_id": None,
+                    "deleted_previous_status": None,
+                }
+            },
+        )
+        return cls.get(ticket_id)
+
+    @classmethod
+    def hard_delete(cls, ticket_id):
+        return cls._collection().delete_one({"id": ticket_id})
+
+    @classmethod
+    def count_all(cls, include_deleted=False):
+        query = {} if include_deleted else {"status": {"$ne": "deleted"}}
+        return cls._collection().count_documents(query)
 
     @classmethod
     def count_by_status(cls, status):
@@ -253,7 +299,7 @@ class Notification:
             "status": status,
             "error_message": error_message,
             "sent_at": sent_at,
-            "created_at": datetime.utcnow(),
+            "created_at": datetime.now(timezone.utc),
         }
         cls._collection().insert_one(doc)
         return cls(doc)
@@ -261,3 +307,172 @@ class Notification:
     @classmethod
     def delete_by_ticket_id(cls, ticket_id):
         cls._collection().delete_many({"ticket_id": ticket_id})
+
+
+class CableReceipt:
+    def __init__(self, doc):
+        self.doc = doc
+        self.id = doc["id"]
+        self.vendor = doc.get("vendor")
+        self.po_number = doc.get("po_number")
+        self.items = doc.get("items", [])
+        self.notes = doc.get("notes")
+        self.received_by_id = doc["received_by_id"]
+        self.received_at = doc.get("received_at")
+        self.created_at = doc.get("created_at")
+
+    @property
+    def receiver(self):
+        return User.get(self.received_by_id)
+
+    def to_dict(self):
+        receiver = self.receiver
+        return {
+            "id": self.id,
+            "vendor": self.vendor,
+            "po_number": self.po_number,
+            "items": self.items,
+            "notes": self.notes,
+            "received_by": receiver.to_dict() if receiver else None,
+            "received_at": self.received_at.isoformat() if self.received_at else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+    @staticmethod
+    def _collection():
+        return get_db().cable_receiving
+
+    @classmethod
+    def create(cls, received_by_id, items, vendor=None, po_number=None, notes=None):
+        now = datetime.now(timezone.utc)
+        doc = {
+            "id": _next_sequence("cable_receiving"),
+            "vendor": vendor,
+            "po_number": po_number,
+            "items": items,
+            "notes": notes,
+            "received_by_id": received_by_id,
+            "received_at": now,
+            "created_at": now,
+        }
+        cls._collection().insert_one(doc)
+        return cls(doc)
+
+    @classmethod
+    def all(cls):
+        return [cls(doc) for doc in cls._collection().find().sort("received_at", -1)]
+
+    @classmethod
+    def get(cls, receipt_id):
+        doc = cls._collection().find_one({"id": receipt_id})
+        return cls(doc) if doc else None
+
+
+class InventoryMovement:
+    def __init__(self, doc):
+        self.doc = doc
+        self.id = doc["id"]
+        self.movement_type = doc["movement_type"]
+        self.source_type = doc.get("source_type")
+        self.source_id = doc.get("source_id")
+        self.actor_user_id = doc.get("actor_user_id")
+        self.cable_type = doc["cable_type"]
+        self.cable_length = doc["cable_length"]
+        self.quantity_delta = doc["quantity_delta"]
+        self.notes = doc.get("notes")
+        self.created_at = doc.get("created_at")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "movement_type": self.movement_type,
+            "source_type": self.source_type,
+            "source_id": self.source_id,
+            "actor_user_id": self.actor_user_id,
+            "cable_type": self.cable_type,
+            "cable_length": self.cable_length,
+            "quantity_delta": self.quantity_delta,
+            "notes": self.notes,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+    @staticmethod
+    def _collection():
+        return get_db().inventory_movements
+
+    @classmethod
+    def create_many(cls, movement_docs):
+        if not movement_docs:
+            return []
+
+        now = datetime.now(timezone.utc)
+        docs = []
+        for raw in movement_docs:
+            docs.append(
+                {
+                    "id": _next_sequence("inventory_movements"),
+                    "movement_type": raw["movement_type"],
+                    "source_type": raw.get("source_type"),
+                    "source_id": raw.get("source_id"),
+                    "actor_user_id": raw.get("actor_user_id"),
+                    "cable_type": raw["cable_type"],
+                    "cable_length": raw["cable_length"],
+                    "quantity_delta": int(raw["quantity_delta"]),
+                    "notes": raw.get("notes"),
+                    "created_at": now,
+                }
+            )
+
+        cls._collection().insert_many(docs)
+        return [cls(doc) for doc in docs]
+
+    @classmethod
+    def exists_for_source(cls, source_type, source_id):
+        return (
+            cls._collection().find_one({"source_type": source_type, "source_id": source_id})
+            is not None
+        )
+
+    @classmethod
+    def list(
+        cls,
+        movement_type=None,
+        source_type=None,
+        source_id=None,
+        limit=200,
+    ):
+        query = {}
+        if movement_type:
+            query["movement_type"] = movement_type
+        if source_type:
+            query["source_type"] = source_type
+        if source_id is not None:
+            query["source_id"] = source_id
+        return [
+            cls(doc)
+            for doc in cls._collection().find(query).sort("created_at", -1).limit(limit)
+        ]
+
+    @classmethod
+    def summary_on_hand(cls):
+        pipeline = [
+            {
+                "$group": {
+                    "_id": {
+                        "cable_type": "$cable_type",
+                        "cable_length": "$cable_length",
+                    },
+                    "on_hand": {"$sum": "$quantity_delta"},
+                }
+            },
+            {
+                "$project": {
+                    "_id": 0,
+                    "cable_type": "$_id.cable_type",
+                    "cable_length": "$_id.cable_length",
+                    "on_hand": 1,
+                }
+            },
+            {"$sort": {"cable_type": 1, "cable_length": 1}},
+        ]
+        return list(cls._collection().aggregate(pipeline))
