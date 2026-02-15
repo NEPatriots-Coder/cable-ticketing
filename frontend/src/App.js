@@ -11,24 +11,30 @@ function App() {
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
-    if (!storedUser) return;
+    const token = localStorage.getItem('access_token');
+    if (!storedUser || !token) return;
     const parsed = JSON.parse(storedUser);
     // Validate the stored user still exists in the DB
     import('./api/axiosinstance').then(({ default: axios }) => {
       axios.get(`/users/${parsed.id}`)
         .then(() => setUser(parsed))
-        .catch(() => localStorage.removeItem('user'));
+        .catch(() => {
+          localStorage.removeItem('user');
+          localStorage.removeItem('access_token');
+        });
     });
   }, []);
 
-  const handleLogin = (userData) => {
+  const handleLogin = (userData, accessToken) => {
     setUser(userData);
     localStorage.setItem('user', JSON.stringify(userData));
+    localStorage.setItem('access_token', accessToken);
   };
 
   const handleLogout = () => {
     setUser(null);
     localStorage.removeItem('user');
+    localStorage.removeItem('access_token');
   };
 
   return (

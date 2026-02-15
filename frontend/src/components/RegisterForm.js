@@ -24,7 +24,7 @@ function RegisterForm({ onRegister }) {
 
     try {
       const response = await axios.post('/register', formData);
-      onRegister(response.data.user);
+      onRegister(response.data.user, response.data.access_token);
     } catch (err) {
       setError(err.response?.data?.error || 'Registration failed');
     }

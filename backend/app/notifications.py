@@ -69,26 +69,29 @@ def send_email(to_email, subject, html_content):
         resend_key = current_app.config.get('RESEND_API_KEY')
         if resend_key:
             from_email = current_app.config.get('SENDGRID_FROM_EMAIL', 'onboarding@resend.dev')
-
-            response = requests.post(
-                'https://api.resend.com/emails',
-                headers={
-                    'Authorization': f'Bearer {resend_key}',
-                    'Content-Type': 'application/json'
-                },
-                json={
-                    'from': from_email,
-                    'to': [to_email],
-                    'subject': subject,
-                    'html': html_content
-                }
-            )
-
-            if response.status_code in [200, 201]:
-                print(f"✅ Email sent via Resend: {response.status_code}")
-                return True
-            else:
-                print(f"⚠️ Resend error: {response.status_code} - {response.text}, trying SendGrid...")
+            for attempt in range(1, 3):
+                try:
+                    response = requests.post(
+                        'https://api.resend.com/emails',
+                        headers={
+                            'Authorization': f'Bearer {resend_key}',
+                            'Content-Type': 'application/json'
+                        },
+                        json={
+                            'from': from_email,
+                            'to': [to_email],
+                            'subject': subject,
+                            'html': html_content
+                        },
+                        timeout=10,
+                    )
+                    if response.status_code in [200, 201]:
+                        print(f"✅ Email sent via Resend: {response.status_code}")
+                        return True
+                    print(f"⚠️ Resend error on attempt {attempt}: {response.status_code} - {response.text}")
+                except requests.RequestException as exc:
+                    print(f"⚠️ Resend request failed on attempt {attempt}: {exc}")
+            print("⚠️ Resend failed after retries, trying SendGrid...")
 
         # Fallback to SendGrid
         api_key = current_app.config.get('SENDGRID_API_KEY')

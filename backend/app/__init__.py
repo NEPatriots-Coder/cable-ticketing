@@ -26,6 +26,7 @@ def create_app():
     app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
     app.config['MONGO_URI'] = os.getenv('MONGO_URI', 'mongodb://localhost:27017')
     app.config['MONGO_DB_NAME'] = os.getenv('MONGO_DB_NAME', 'ticketing')
+    app.config['AUTH_TOKEN_TTL_SECONDS'] = int(os.getenv('AUTH_TOKEN_TTL_SECONDS', '86400'))
 
     # Twilio Configuration
     app.config['TWILIO_ACCOUNT_SID'] = os.getenv('TWILIO_ACCOUNT_SID')

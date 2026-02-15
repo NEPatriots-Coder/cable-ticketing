@@ -21,7 +21,7 @@ function LoginForm({ onLogin }) {
     try {
       const response = await axios.post('/login', credentials);
 
-      onLogin(response.data.user);
+      onLogin(response.data.user, response.data.access_token);
     } catch (err) {
       setError(err.response?.data?.error || 'Login failed');
     }

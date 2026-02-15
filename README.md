@@ -140,6 +140,13 @@ Create Ticket → Pending Approval → Approved/Rejected → In Progress → Ful
 - `POST /api/register` - Register new user
 - `POST /api/login` - Login user
 
+`/api/login` and `/api/register` return `access_token` (Bearer token).  
+Use `Authorization: Bearer <token>` for mutating endpoints such as:
+- `POST /api/tickets`
+- `PATCH /api/tickets/<id>`
+- `DELETE /api/tickets/<id>`
+- `POST /api/cable-receiving`
+
 ### Users
 - `GET /api/users` - List all users
 - `GET /api/users/<id>` - Get specific user
@@ -163,6 +170,14 @@ Create Ticket → Pending Approval → Approved/Rejected → In Progress → Ful
 - `GET /api/cable-receiving` - List receiving records
 - `GET /api/inventory/movements` - List inventory ledger movements
 - `GET /api/inventory/on-hand` - View on-hand quantity by cable type/length
+
+## Ops Safety
+
+- Backend no longer auto-seeds users on every boot (`RUN_SEED_ON_START=false` by default).
+- Docker services include health checks in `docker-compose.yml`.
+- Use backup scripts:
+  - `ops/mongo_backup.sh`
+  - `ops/mongo_restore.sh /path/to/ticketing.archive.gz`
 
 ## Database Schema
 

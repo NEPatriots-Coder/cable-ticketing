@@ -34,7 +34,7 @@ function TicketList({ currentUser, refreshTrigger, onTicketDeleted }) {
   const handleDeleteTicket = async (ticketId) => {
     if (!window.confirm('Archive this ticket? It will be hidden from the default ticket list.')) return;
     try {
-      await axios.delete(`/tickets/${ticketId}`, { data: { user_id: currentUser.id } });
+      await axios.delete(`/tickets/${ticketId}`);
       fetchTickets();
       if (onTicketDeleted) onTicketDeleted();
     } catch (err) {

@@ -2,6 +2,7 @@ from flask import Blueprint, current_app, request, jsonify
 from app.models import User, Ticket, Notification, CableReceipt, InventoryMovement
 from app.notifications import notify_ticket_created, notify_status_change
 from werkzeug.security import generate_password_hash, check_password_hash
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from datetime import datetime, timezone
 
 api = Blueprint('api', __name__)
@@ -24,16 +25,32 @@ STATUS_TRANSITIONS = {
 }
 
 
-def _require_actor():
-    data = request.json or {}
-    raw_user_id = data.get('user_id')
-    if raw_user_id is None:
-        return None, jsonify({'error': 'user_id is required'}), 400
-    try:
-        user_id = int(raw_user_id)
-    except (TypeError, ValueError):
-        return None, jsonify({'error': 'user_id must be an integer'}), 400
+def _token_serializer():
+    return URLSafeTimedSerializer(current_app.config['SECRET_KEY'], salt='auth-token-v1')
 
+
+def _issue_access_token(user):
+    return _token_serializer().dumps({'user_id': user.id})
+
+
+def _require_actor():
+    auth_header = request.headers.get('Authorization', '')
+    if not auth_header.startswith('Bearer '):
+        return None, jsonify({'error': 'Authorization bearer token is required'}), 401
+
+    token = auth_header.split(' ', 1)[1].strip()
+    if not token:
+        return None, jsonify({'error': 'Authorization bearer token is required'}), 401
+
+    max_age = int(current_app.config.get('AUTH_TOKEN_TTL_SECONDS', 86400))
+    try:
+        payload = _token_serializer().loads(token, max_age=max_age)
+    except SignatureExpired:
+        return None, jsonify({'error': 'Token expired'}), 401
+    except BadSignature:
+        return None, jsonify({'error': 'Invalid token'}), 401
+
+    user_id = payload.get('user_id')
     user = User.get(user_id)
     if not user:
         return None, jsonify({'error': 'User not found'}), 404
@@ -81,9 +98,11 @@ def register():
     # instead of failing with 400.
     existing_user = User.find_by_username_or_email(data.get('username'), data.get('email'))
     if existing_user:
+        token = _issue_access_token(existing_user)
         return jsonify({
             'message': 'User already exists',
-            'user': existing_user.to_dict()
+            'user': existing_user.to_dict(),
+            'access_token': token,
         }), 200
 
     if not all([data.get('username'), data.get('email'), data.get('phone'), data.get('password')]):
@@ -97,7 +116,8 @@ def register():
         role=data.get('role', 'user'),
     )
 
-    return jsonify({'message': 'User created', 'user': user.to_dict()}), 201
+    token = _issue_access_token(user)
+    return jsonify({'message': 'User created', 'user': user.to_dict(), 'access_token': token}), 201
 
 @api.route('/login', methods=['POST'])
 def login():
@@ -108,7 +128,8 @@ def login():
     if not user or not check_password_hash(user.password_hash, data.get('password', '')):
         return jsonify({'error': 'Invalid credentials'}), 401
 
-    return jsonify({'message': 'Login successful', 'user': user.to_dict()}), 200
+    token = _issue_access_token(user)
+    return jsonify({'message': 'Login successful', 'user': user.to_dict(), 'access_token': token}), 200
 
 # ============= USER ROUTES =============
 
@@ -149,9 +170,13 @@ def get_ticket(ticket_id):
 @api.route('/tickets', methods=['POST'])
 def create_ticket():
     """Create a new ticket"""
+    actor, error_response, status_code = _require_actor()
+    if error_response:
+        return error_response, status_code
+
     data = request.json or {}
 
-    required = ['created_by_id', 'assigned_to_id', 'items']
+    required = ['assigned_to_id', 'items']
     missing = [field for field in required if not data.get(field)]
     if missing:
         return jsonify({'error': f"Missing required fields: {', '.join(missing)}"}), 400
@@ -164,18 +189,17 @@ def create_ticket():
             return jsonify({'error': 'Each item requires cable_type, cable_length, and quantity'}), 400
 
     try:
-        created_by_id = int(data['created_by_id'])
         assigned_to_id = int(data['assigned_to_id'])
     except (ValueError, TypeError):
-        return jsonify({'error': 'created_by_id and assigned_to_id must be integers'}), 400
+        return jsonify({'error': 'assigned_to_id must be an integer'}), 400
 
-    creator = User.get(created_by_id)
+    creator = actor
     assignee = User.get(assigned_to_id)
-    if not creator or not assignee:
-        return jsonify({'error': 'created_by_id and assigned_to_id must reference valid users'}), 400
+    if not assignee:
+        return jsonify({'error': 'assigned_to_id must reference a valid user'}), 400
 
     ticket = Ticket.create(
-        created_by_id=created_by_id,
+        created_by_id=creator.id,
         assigned_to_id=assigned_to_id,
         items=items,
         location=data.get('location'),
@@ -191,6 +215,10 @@ def create_ticket():
 @api.route('/tickets/<int:ticket_id>', methods=['PATCH'])
 def update_ticket(ticket_id):
     """Update ticket status"""
+    actor, error_response, status_code = _require_actor()
+    if error_response:
+        return error_response, status_code
+
     ticket = Ticket.get(ticket_id)
     if not ticket:
         return jsonify({'error': 'Ticket not found'}), 404
@@ -206,8 +234,15 @@ def update_ticket(ticket_id):
             return jsonify({'error': f'Invalid status: {new_status}'}), 400
         if new_status != old_status and new_status not in STATUS_TRANSITIONS.get(old_status, set()):
             return jsonify({'error': f'Invalid status transition: {old_status} -> {new_status}'}), 409
+        if actor.role != 'admin':
+            if new_status in ['approved', 'rejected'] and ticket.assigned_to_id != actor.id:
+                return jsonify({'error': 'Only assignee or admin can set approval states'}), 403
+            if new_status in ['in_progress', 'fulfilled', 'closed'] and ticket.assigned_to_id != actor.id:
+                return jsonify({'error': 'Only assignee or admin can set work states'}), 403
         updates['status'] = new_status
     if 'rejection_reason' in data:
+        if actor.role != 'admin' and ticket.assigned_to_id != actor.id:
+            return jsonify({'error': 'Only assignee or admin can update rejection reason'}), 403
         updates['rejection_reason'] = data['rejection_reason']
 
     ticket = Ticket.update_fields(ticket_id, updates) if updates else ticket
@@ -236,7 +271,12 @@ def update_ticket(ticket_id):
                         'notes': f'Ticket #{ticket.id} fulfilled',
                     }
                 )
-            InventoryMovement.create_many(movement_docs)
+            try:
+                InventoryMovement.create_many(movement_docs)
+            except Exception:
+                # Roll back status to avoid fulfilled-without-ledger inconsistency.
+                Ticket.update_fields(ticket_id, {'status': old_status})
+                return jsonify({'error': 'Inventory ledger update failed; ticket status rolled back'}), 500
 
     # Notify if status changed significantly
     if old_status != ticket.status and ticket.status in ['approved', 'rejected', 'fulfilled']:
@@ -347,7 +387,11 @@ def create_cable_receiving():
         }
         for item in receipt.items
     ]
-    InventoryMovement.create_many(movement_docs)
+    try:
+        InventoryMovement.create_many(movement_docs)
+    except Exception:
+        CableReceipt._collection().delete_one({'id': receipt.id})
+        return jsonify({'error': 'Failed to write inventory ledger; receipt rolled back'}), 500
     current_app.logger.info('cable_receiving_created receipt_id=%s actor_id=%s', receipt.id, actor.id)
 
     return jsonify({'message': 'Cable receiving recorded', 'receipt': receipt.to_dict()}), 201
