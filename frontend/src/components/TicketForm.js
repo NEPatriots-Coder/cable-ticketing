@@ -8,7 +8,8 @@ const getInitialFormData = () => ({
   items: [newItem()],
   location: '',
   notes: '',
-  priority: 'medium'
+  priority: 'medium',
+  request_date: ''
 });
 
 function TicketForm({ currentUser, onTicketCreated }) {
@@ -164,6 +165,18 @@ function TicketForm({ currentUser, onTicketCreated }) {
           <button type="button" className="btn-secondary" onClick={addItem}>
             + Add Item
           </button>
+        </div>
+
+        <div className="form-group">
+          <label>Request Date *</label>
+          <input
+            type="text"
+            name="request_date"
+            value={formData.request_date}
+            onChange={handleChange}
+            placeholder="e.g., 2-2-26 or Feb 2 2026"
+            required
+          />
         </div>
 
         <div className="form-group">
