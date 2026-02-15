@@ -115,12 +115,12 @@ def send_email(to_email, subject, html_content):
 
 def notify_ticket_created(ticket):
     """Send notification when ticket is created"""
-    app_url = current_app.config['APP_URL']
+    app_url = current_app.config['APP_URL'].rstrip('/')
     assignee = ticket.assignee
 
     # Generate approval/rejection links
-    approve_url = f"{app_url}/api/tickets/{ticket.id}/approve/{ticket.approval_token}"
-    reject_url = f"{app_url}/api/tickets/{ticket.id}/reject/{ticket.approval_token}"
+    approve_url = f"{app_url}/tickets/{ticket.id}/approve/{ticket.approval_token}"
+    reject_url = f"{app_url}/tickets/{ticket.id}/reject/{ticket.approval_token}"
 
     # SMS message
     items_sms = "\n".join(
@@ -196,7 +196,10 @@ Reject: {reject_url}
 def notify_status_change(ticket, new_status):
     """Send notification when ticket status changes"""
     creator = ticket.creator
-    app_url = current_app.config['APP_URL']
+    app_url = current_app.config['APP_URL'].rstrip('/')
+    first_item = (ticket.items or [{}])[0]
+    cable_type = first_item.get('cable_type', 'N/A')
+    cable_length = first_item.get('cable_length', 'N/A')
 
     status_messages = {
         'approved': '✅ Your cable request has been APPROVED!',
@@ -213,8 +216,8 @@ def notify_status_change(ticket, new_status):
 {message}
 
 Ticket #{ticket.id}
-Type: {ticket.cable_type}
-Length: {ticket.cable_length}
+Type: {cable_type}
+Length: {cable_length}
 
 View: {app_url}/tickets/{ticket.id}
 """
@@ -229,8 +232,8 @@ View: {app_url}/tickets/{ticket.id}
 
         <div style="background-color: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0;">
             <p><strong>Ticket ID:</strong> #{ticket.id}</p>
-            <p><strong>Cable Type:</strong> {ticket.cable_type}</p>
-            <p><strong>Length:</strong> {ticket.cable_length}</p>
+            <p><strong>Cable Type:</strong> {cable_type}</p>
+            <p><strong>Length:</strong> {cable_length}</p>
             <p><strong>Status:</strong> {new_status.upper()}</p>
             {f'<p><strong>Rejection Reason:</strong> {ticket.rejection_reason}</p>' if ticket.rejection_reason else ''}
         </div>
