@@ -1,13 +1,14 @@
+import os
+import uuid
 import pytest
 
 import app as app_module
-
-mongomock = pytest.importorskip("mongomock")
-
+from app.models import Ticket
 
 @pytest.fixture
 def client(monkeypatch):
-    monkeypatch.setattr(app_module, "MongoClient", mongomock.MongoClient)
+    test_db_path = f"/tmp/ticketing_test_{uuid.uuid4().hex}.db"
+    os.environ["DATABASE_URL"] = f"sqlite:///{test_db_path}"
     flask_app = app_module.create_app()
 
     import app.routes as routes
@@ -17,6 +18,10 @@ def client(monkeypatch):
 
     with flask_app.test_client() as test_client:
         yield test_client
+    try:
+        os.remove(test_db_path)
+    except FileNotFoundError:
+        pass
 
 
 def _create_user(client, username, email, role="user"):
@@ -104,9 +109,7 @@ def test_deleted_tickets_block_actions(client):
     assignee = _create_user(client, "assignee2", "assignee2@example.com")
     ticket = _create_ticket(client, creator, assignee["id"])
 
-    db = app_module.get_db()
-    doc = db.tickets.find_one({"id": ticket["id"]})
-    token = doc["approval_token"]
+    token = Ticket.get(ticket["id"]).approval_token
 
     client.delete(
         f"/api/tickets/{ticket['id']}",

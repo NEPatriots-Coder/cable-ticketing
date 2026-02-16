@@ -390,7 +390,7 @@ def create_cable_receiving():
     try:
         InventoryMovement.create_many(movement_docs)
     except Exception:
-        CableReceipt._collection().delete_one({'id': receipt.id})
+        CableReceipt.delete_by_id(receipt.id)
         return jsonify({'error': 'Failed to write inventory ledger; receipt rolled back'}), 500
     current_app.logger.info('cable_receiving_created receipt_id=%s actor_id=%s', receipt.id, actor.id)
 

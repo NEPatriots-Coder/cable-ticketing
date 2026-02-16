@@ -41,7 +41,7 @@ A Jira-like ticketing application for managing cable requests. Built with React 
 |-------|-----------|
 | Frontend | React 18, React Router v6, Axios, CSS3 |
 | Backend | Flask 3.0, SQLAlchemy, Gunicorn |
-| Database | SQLite (dev) / PostgreSQL (prod) |
+| Database | PostgreSQL (Docker/RDS), SQLite supported for local tests |
 | Notifications | Resend/SendGrid (email), Twilio/AWS SNS (SMS) |
 | DevOps | Docker, Docker Compose, Helm, Kubernetes |
 
@@ -98,9 +98,9 @@ npm start
 Edit `backend/.env`:
 
 ```bash
-# Flask
+# Flask / DB
 SECRET_KEY=your-secret-key-here
-DATABASE_URL=sqlite:///ticketing.db
+DATABASE_URL=postgresql+psycopg2://ticketing:ticketing@postgres:5432/ticketing
 
 # Resend (Email - primary)
 RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
@@ -176,8 +176,8 @@ Use `Authorization: Bearer <token>` for mutating endpoints such as:
 - Backend no longer auto-seeds users on every boot (`RUN_SEED_ON_START=false` by default).
 - Docker services include health checks in `docker-compose.yml`.
 - Use backup scripts:
-  - `ops/mongo_backup.sh`
-  - `ops/mongo_restore.sh /path/to/ticketing.archive.gz`
+  - `ops/postgres_backup.sh`
+  - `ops/postgres_restore.sh /path/to/ticketing.dump`
 
 ## Database Schema
 

@@ -6,7 +6,8 @@ Existing demo users are updated in place so credentials remain deterministic.
 
 from app import create_app
 from app.models import User
-from pymongo.errors import DuplicateKeyError
+from app import db
+from sqlalchemy.exc import IntegrityError
 from werkzeug.security import generate_password_hash
 
 app = create_app()
@@ -61,20 +62,15 @@ with app.app_context():
                 continue
 
             try:
-                User._collection().update_one(
-                    {"id": existing.id},
-                    {
-                        "$set": {
-                            "username": user_data["username"],
-                            "email": user_data["email"],
-                            "phone": user_data["phone"],
-                            "role": user_data["role"],
-                            "password_hash": generate_password_hash(user_data["password"]),
-                        }
-                    },
-                )
-            except DuplicateKeyError as exc:
-                print(f"  ❌ Failed to update {user_data['username']}: {exc.details}")
+                existing.username = user_data["username"]
+                existing.email = user_data["email"]
+                existing.phone = user_data["phone"]
+                existing.role = user_data["role"]
+                existing.password_hash = generate_password_hash(user_data["password"])
+                db.session.commit()
+            except IntegrityError as exc:
+                db.session.rollback()
+                print(f"  ❌ Failed to update {user_data['username']}: {exc}")
                 continue
             print(f"  🔁 Updated {user_data['username']} ({user_data['email']})")
             continue
@@ -88,8 +84,9 @@ with app.app_context():
                 password_hash=generate_password_hash(user_data['password']),
                 role=user_data['role']
             )
-        except DuplicateKeyError as exc:
-            print(f"  ❌ Failed to create {user_data['username']}: {exc.details}")
+        except IntegrityError as exc:
+            db.session.rollback()
+            print(f"  ❌ Failed to create {user_data['username']}: {exc}")
             continue
         print(f"  ✅ Created {user_data['username']} ({user_data['email']})")
     print("\n✨ Done! Demo users created.")

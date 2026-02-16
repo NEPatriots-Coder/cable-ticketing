@@ -1,31 +1,28 @@
 from flask import Flask
 from flask_cors import CORS
 from flask_login import LoginManager
-from pymongo import ASCENDING, MongoClient
+from flask_sqlalchemy import SQLAlchemy
 from dotenv import load_dotenv
 import os
 
 load_dotenv()
 
 login_manager = LoginManager()
-mongo_client = None
-mongo_db = None
+db = SQLAlchemy()
 
 
 def get_db():
-    if mongo_db is None:
-        raise RuntimeError("MongoDB is not initialized")
-    return mongo_db
+    return db.session
+
 
 def create_app():
-    global mongo_client, mongo_db
-
     app = Flask(__name__)
 
     # Configuration
     app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
-    app.config['MONGO_URI'] = os.getenv('MONGO_URI', 'mongodb://localhost:27017')
-    app.config['MONGO_DB_NAME'] = os.getenv('MONGO_DB_NAME', 'ticketing')
+    app.config['DATABASE_URL'] = os.getenv('DATABASE_URL', 'sqlite:///ticketing.db')
+    app.config['SQLALCHEMY_DATABASE_URI'] = app.config['DATABASE_URL']
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['AUTH_TOKEN_TTL_SECONDS'] = int(os.getenv('AUTH_TOKEN_TTL_SECONDS', '86400'))
 
     # Twilio Configuration
@@ -46,35 +43,16 @@ def create_app():
     # App URL for notification links
     app.config['APP_URL'] = os.getenv('APP_URL', 'http://localhost:3000')
 
-    # Initialize MongoDB connection and indexes
-    mongo_client = MongoClient(app.config['MONGO_URI'])
-    mongo_db = mongo_client[app.config['MONGO_DB_NAME']]
-    mongo_db.users.create_index([("id", ASCENDING)], unique=True)
-    mongo_db.users.create_index([("username", ASCENDING)], unique=True)
-    mongo_db.users.create_index([("email", ASCENDING)], unique=True)
-    mongo_db.tickets.create_index([("id", ASCENDING)], unique=True)
-    mongo_db.tickets.create_index([("approval_token", ASCENDING)], unique=True)
-    mongo_db.tickets.create_index([("status", ASCENDING), ("created_at", ASCENDING)])
-    mongo_db.tickets.create_index([("created_by_id", ASCENDING), ("created_at", ASCENDING)])
-    mongo_db.tickets.create_index([("assigned_to_id", ASCENDING), ("created_at", ASCENDING)])
-    mongo_db.cable_receiving.create_index([("id", ASCENDING)], unique=True)
-    mongo_db.cable_receiving.create_index([("received_at", ASCENDING)])
-    mongo_db.inventory_movements.create_index([("id", ASCENDING)], unique=True)
-    mongo_db.inventory_movements.create_index([("source_type", ASCENDING), ("source_id", ASCENDING)])
-    mongo_db.inventory_movements.create_index([("movement_type", ASCENDING), ("created_at", ASCENDING)])
-    mongo_db.inventory_movements.create_index([("cable_type", ASCENDING), ("cable_length", ASCENDING)])
-    mongo_db.notifications.create_index([("id", ASCENDING)], unique=True)
-    mongo_db.notifications.create_index([("ticket_id", ASCENDING)])
-    mongo_db.notifications.create_index([("recipient_user_id", ASCENDING)])
-
     CORS(app)
     login_manager.init_app(app)
+    db.init_app(app)
 
     # Register blueprints
     from app.routes import api
     app.register_blueprint(api, url_prefix='/api')
 
     with app.app_context():
-        print("✅ MongoDB initialized successfully")
+        db.create_all()
+        print('✅ SQL database initialized successfully')
 
     return app

@@ -1,12 +1,16 @@
 services:
-  mongo:
-    image: mongo:7
-    container_name: cable-ticketing-mongo
+  postgres:
+    image: postgres:16
+    container_name: cable-ticketing-postgres
     restart: unless-stopped
+    environment:
+      - POSTGRES_USER=ticketing
+      - POSTGRES_PASSWORD=ticketing
+      - POSTGRES_DB=ticketing
     volumes:
-      - mongo-data:/data/db
+      - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping').ok"]
+      test: ["CMD-SHELL", "pg_isready -U ticketing -d ticketing"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -21,12 +25,12 @@ services:
     ports:
       - "5001:5000"
     depends_on:
-      mongo:
+      postgres:
         condition: service_healthy
     env_file:
       - ./backend/.env
     environment:
-      - MONGO_URI=mongodb://mongo:27017
+      - DATABASE_URL=postgresql+psycopg2://ticketing:ticketing@postgres:5432/ticketing
       - RUN_SEED_ON_START=false
     volumes:
       - ./backend:/app
@@ -59,7 +63,7 @@ services:
       - cable-network
 
 volumes:
-  mongo-data:
+  postgres-data:
 
 networks:
   cable-network:
