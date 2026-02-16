@@ -18,8 +18,8 @@ backend:
       cpu: "500m"
   env:
     secretKey: "change-this-in-production"
-    databaseUrl: "sqlite:///ticketing.db"
-    appUrl: "http://localhost:3000"
+    databaseUrl: "postgresql+psycopg2://ticketing:ticketing@postgres:5432/ticketing"
+    appUrl: "http://146.190.147.176:3000/"
     sendgridFromEmail: "noreply@cabletickets.com"
 
 frontend:
