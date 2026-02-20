@@ -228,6 +228,36 @@ def test_cable_receiving_creates_positive_inventory(client):
     assert {"cable_type": "Fiber", "cable_length": "200m", "on_hand": 2} in entries
 
 
+def test_cable_receiving_stores_po_and_storage_location(client):
+    admin = _create_user(client, "admin_recv", "admin_recv@example.com", role="admin")
+
+    resp = client.post(
+        "/api/cable-receiving",
+        json={
+            "vendor": "WireCo",
+            "po_number": "PO-2024-999",
+            "storage_location": "Warehouse A, Shelf 3",
+            "items": [
+                {"cable_type": "Cat6", "cable_length": "50m", "quantity": 10},
+            ],
+            "notes": "Test receiving record",
+        },
+        headers={"Authorization": f"Bearer {admin['access_token']}"},
+    )
+    assert resp.status_code == 201
+    receipt = resp.get_json()["receipt"]
+    assert receipt["po_number"] == "PO-2024-999"
+    assert receipt["storage_location"] == "Warehouse A, Shelf 3"
+    assert receipt["vendor"] == "WireCo"
+    assert len(receipt["items"]) == 1
+    assert receipt["items"][0]["quantity"] == 10
+
+    listed = client.get("/api/cable-receiving")
+    assert listed.status_code == 200
+    records = listed.get_json()
+    assert any(r["po_number"] == "PO-2024-999" and r["storage_location"] == "Warehouse A, Shelf 3" for r in records)
+
+
 def test_ticket_fulfillment_creates_consumption_movements(client):
     creator = _create_user(client, "creator5", "creator5@example.com")
     assignee = _create_user(client, "assignee5", "assignee5@example.com")

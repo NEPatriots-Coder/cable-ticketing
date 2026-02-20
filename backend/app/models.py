@@ -286,6 +286,7 @@ class CableReceipt(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     vendor = db.Column(db.String(255), nullable=True)
     po_number = db.Column(db.String(255), nullable=True)
+    storage_location = db.Column(db.String(255), nullable=True)
     items = db.Column(db.JSON, nullable=False)
     notes = db.Column(db.Text, nullable=True)
     received_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
@@ -304,6 +305,7 @@ class CableReceipt(db.Model):
             'id': self.id,
             'vendor': self.vendor,
             'po_number': self.po_number,
+            'storage_location': self.storage_location,
             'items': self.items or [],
             'notes': self.notes,
             'received_by': receiver.to_dict() if receiver else None,
@@ -312,11 +314,12 @@ class CableReceipt(db.Model):
         }
 
     @classmethod
-    def create(cls, received_by_id, items, vendor=None, po_number=None, notes=None):
+    def create(cls, received_by_id, items, vendor=None, po_number=None, storage_location=None, notes=None):
         now = _utcnow()
         item = cls(
             vendor=vendor,
             po_number=po_number,
+            storage_location=storage_location,
             items=items,
             notes=notes,
             received_by_id=received_by_id,

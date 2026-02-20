@@ -3,6 +3,7 @@ from flask_cors import CORS
 from flask_login import LoginManager
 from flask_sqlalchemy import SQLAlchemy
 from dotenv import load_dotenv
+from sqlalchemy import inspect, text
 import os
 
 load_dotenv()
@@ -13,6 +14,19 @@ db = SQLAlchemy()
 
 def get_db():
     return db.session
+
+
+def _ensure_runtime_schema():
+    """Apply small, idempotent schema updates for existing deployments."""
+    inspector = inspect(db.engine)
+    table_names = set(inspector.get_table_names())
+    if 'cable_receiving' not in table_names:
+        return
+
+    columns = {column['name'] for column in inspector.get_columns('cable_receiving')}
+    if 'storage_location' not in columns:
+        with db.engine.begin() as conn:
+            conn.execute(text("ALTER TABLE cable_receiving ADD COLUMN storage_location VARCHAR(255)"))
 
 
 def create_app():
@@ -53,6 +67,7 @@ def create_app():
 
     with app.app_context():
         db.create_all()
+        _ensure_runtime_schema()
         print('✅ SQL database initialized successfully')
 
     return app

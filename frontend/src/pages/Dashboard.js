@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from '../api/axiosinstance';
 import TicketForm from '../components/TicketForm';
 import TicketList from '../components/TicketList';
 
 function Dashboard({ user, onLogout }) {
+  const navigate = useNavigate();
   const [stats, setStats] = useState(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
@@ -31,6 +33,13 @@ function Dashboard({ user, onLogout }) {
           <h1>🔌 Cable Ticketing System</h1>
         </div>
         <div className="nav-user">
+          <button
+            onClick={() => navigate('/receiving')}
+            className="btn-nav-link"
+            aria-label="Go to Receiving"
+          >
+            Receiving
+          </button>
           <span>Welcome, <strong>{user.username}</strong></span>
           <button onClick={onLogout} className="btn-logout">Logout</button>
         </div>

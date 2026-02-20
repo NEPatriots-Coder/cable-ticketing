@@ -371,6 +371,7 @@ def create_cable_receiving():
         items=items,
         vendor=data.get('vendor'),
         po_number=data.get('po_number'),
+        storage_location=data.get('storage_location'),
         notes=data.get('notes'),
     )
 

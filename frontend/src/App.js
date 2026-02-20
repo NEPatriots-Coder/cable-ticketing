@@ -4,6 +4,7 @@ import Dashboard from './pages/Dashboard';
 import LoginForm from './components/LoginForm';
 import RegisterForm from './components/RegisterForm';
 import ApprovalPage from './pages/ApprovalPage';
+import ReceivingPage from './pages/ReceivingPage';
 import './App.css';
 
 function App() {
@@ -51,6 +52,9 @@ function App() {
           <Route path="/tickets/:ticketId/reject/:token" element={<ApprovalPage action="reject" />} />
           <Route path="/" element={
             user ? <Dashboard user={user} onLogout={handleLogout} /> : <Navigate to="/login" />
+          } />
+          <Route path="/receiving" element={
+            user ? <ReceivingPage user={user} onLogout={handleLogout} /> : <Navigate to="/login" />
           } />
         </Routes>
       </div>
