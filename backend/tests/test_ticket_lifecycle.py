@@ -58,6 +58,20 @@ def _create_ticket(client, creator_user, assignee_id):
     return response.get_json()["ticket"]
 
 
+def test_auth_me_requires_valid_token(client):
+    user = _create_user(client, "auth_user", "auth_user@example.com")
+
+    ok = client.get(
+        "/api/auth/me",
+        headers={"Authorization": f"Bearer {user['access_token']}"},
+    )
+    assert ok.status_code == 200
+    assert ok.get_json()["user"]["id"] == user["id"]
+
+    missing = client.get("/api/auth/me")
+    assert missing.status_code == 401
+
+
 def test_soft_delete_and_visibility(client):
     creator = _create_user(client, "creator1", "creator1@example.com")
     assignee = _create_user(client, "assignee1", "assignee1@example.com")

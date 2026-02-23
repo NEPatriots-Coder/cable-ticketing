@@ -5,25 +5,40 @@ import LoginForm from './components/LoginForm';
 import RegisterForm from './components/RegisterForm';
 import ApprovalPage from './pages/ApprovalPage';
 import ReceivingPage from './pages/ReceivingPage';
+import axios from './api/axiosinstance';
 import './App.css';
 
 function App() {
   const [user, setUser] = useState(null);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
     const token = localStorage.getItem('access_token');
-    if (!storedUser || !token) return;
-    const parsed = JSON.parse(storedUser);
-    // Validate the stored user still exists in the DB
-    import('./api/axiosinstance').then(({ default: axios }) => {
-      axios.get(`/users/${parsed.id}`)
-        .then(() => setUser(parsed))
-        .catch(() => {
+    if (!token) return;
+
+    axios.get('/auth/me')
+      .then((response) => {
+        const authedUser = response.data?.user;
+        if (!authedUser) {
           localStorage.removeItem('user');
           localStorage.removeItem('access_token');
-        });
-    });
+          return;
+        }
+        setUser(authedUser);
+        localStorage.setItem('user', JSON.stringify(authedUser));
+      })
+      .catch(() => {
+        localStorage.removeItem('user');
+        localStorage.removeItem('access_token');
+      });
+  }, []);
+
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      setUser(null);
+    };
+
+    window.addEventListener('auth:expired', handleAuthExpired);
+    return () => window.removeEventListener('auth:expired', handleAuthExpired);
   }, []);
 
   const handleLogin = (userData, accessToken) => {

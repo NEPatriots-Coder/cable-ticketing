@@ -131,6 +131,15 @@ def login():
     token = _issue_access_token(user)
     return jsonify({'message': 'Login successful', 'user': user.to_dict(), 'access_token': token}), 200
 
+
+@api.route('/auth/me', methods=['GET'])
+def auth_me():
+    """Validate the access token and return the current user."""
+    actor, error_response, status_code = _require_actor()
+    if error_response:
+        return error_response, status_code
+    return jsonify({'user': actor.to_dict()}), 200
+
 # ============= USER ROUTES =============
 
 @api.route('/users', methods=['GET'])
