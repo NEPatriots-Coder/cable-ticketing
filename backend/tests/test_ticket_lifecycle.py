@@ -15,6 +15,8 @@ def client(monkeypatch):
 
     monkeypatch.setattr(routes, "notify_ticket_created", lambda ticket: None)
     monkeypatch.setattr(routes, "notify_status_change", lambda ticket, status: None)
+    monkeypatch.setattr(routes, "notify_optics_request_created", lambda optics_request: None)
+    monkeypatch.setattr(routes, "notify_optics_request_status_change", lambda optics_request, status: None)
 
     with flask_app.test_client() as test_client:
         yield test_client

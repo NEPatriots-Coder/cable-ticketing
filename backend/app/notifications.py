@@ -3,7 +3,7 @@ from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 from datetime import datetime, timezone
 from flask import current_app
-from app.models import Notification
+from app.models import Notification, User
 import requests
 import boto3
 from botocore.exceptions import ClientError
@@ -249,3 +249,82 @@ View: {app_url}/tickets/{ticket.id}
 
     send_sms(creator.phone, sms_message.strip())
     send_email(creator.email, f"Ticket #{ticket.id} Update", email_html)
+
+
+def _optics_admin_emails():
+    configured = (current_app.config.get('OPTICS_ALERT_EMAILS') or '').strip()
+    if configured:
+        return [email.strip() for email in configured.split(',') if email.strip()]
+    return [user.email for user in User.all() if user.role == 'admin' and user.email]
+
+
+def notify_optics_request_created(optics_request):
+    recipients = _optics_admin_emails()
+    if not recipients:
+        return
+
+    app_url = current_app.config['APP_URL'].rstrip('/')
+    requested_by = optics_request.requester.username if optics_request.requester else 'Unknown'
+
+    email_html = f"""
+<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+        <h2 style="color: #2563eb;">New Optics Request</h2>
+
+        <div style="background-color: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <p><strong>Request ID:</strong> #{optics_request.id}</p>
+            <p><strong>Part Number:</strong> {optics_request.part_number}</p>
+            <p><strong>Quantity:</strong> {optics_request.quantity}</p>
+            <p><strong>Requester Name:</strong> {optics_request.requester_name}</p>
+            <p><strong>Submitted By:</strong> {requested_by}</p>
+            <p><strong>Status:</strong> {optics_request.status.upper()}</p>
+        </div>
+
+        <p><a href="{app_url}/optics" style="color: #2563eb;">Open Optics Requests</a></p>
+    </div>
+</body>
+</html>
+"""
+
+    subject = f"Optics Request #{optics_request.id} - {optics_request.part_number}"
+    for recipient in recipients:
+        send_email(recipient, subject, email_html)
+
+
+def notify_optics_request_status_change(optics_request, new_status):
+    requester = optics_request.requester
+    if not requester or not requester.email:
+        return
+
+    app_url = current_app.config['APP_URL'].rstrip('/')
+    status_label = (new_status or '').upper()
+    admin_actor = optics_request.admin_actor.username if optics_request.admin_actor else 'Admin'
+
+    email_html = f"""
+<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+        <h2 style="color: #2563eb;">Optics Request Update</h2>
+        <p style="font-size: 18px; font-weight: bold;">Your request status is now {status_label}.</p>
+
+        <div style="background-color: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <p><strong>Request ID:</strong> #{optics_request.id}</p>
+            <p><strong>Part Number:</strong> {optics_request.part_number}</p>
+            <p><strong>Quantity:</strong> {optics_request.quantity}</p>
+            <p><strong>Requester Name:</strong> {optics_request.requester_name}</p>
+            <p><strong>Updated By:</strong> {admin_actor}</p>
+            {f"<p><strong>Admin Note:</strong> {optics_request.admin_note}</p>" if optics_request.admin_note else ""}
+        </div>
+
+        <p><a href="{app_url}/optics" style="color: #2563eb;">View Optics Requests</a></p>
+    </div>
+</body>
+</html>
+"""
+
+    send_email(
+        requester.email,
+        f"Optics Request #{optics_request.id} {status_label}",
+        email_html,
+    )

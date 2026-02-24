@@ -1,6 +1,11 @@
 from flask import Blueprint, current_app, request, jsonify
 from app.models import User, Ticket, Notification, CableReceipt, InventoryMovement, OpticsRequest
-from app.notifications import notify_ticket_created, notify_status_change
+from app.notifications import (
+    notify_ticket_created,
+    notify_status_change,
+    notify_optics_request_created,
+    notify_optics_request_status_change,
+)
 from werkzeug.security import generate_password_hash, check_password_hash
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from datetime import datetime, timezone
@@ -533,6 +538,7 @@ def create_optics_request():
         quantity=payload['quantity'],
         requester_name=payload['requester_name'],
     )
+    notify_optics_request_created(optics_request)
     current_app.logger.info('optics_request_created request_id=%s actor_id=%s', optics_request.id, actor.id)
     return jsonify({'message': 'Optics request created', 'request': optics_request.to_dict()}), 201
 
@@ -574,6 +580,7 @@ def update_optics_request_status(request_id):
         admin_actor_id=actor.id,
         admin_note=admin_note,
     )
+    notify_optics_request_status_change(updated, updated.status)
     current_app.logger.info(
         'optics_request_status_changed request_id=%s actor_id=%s action=%s',
         request_id,

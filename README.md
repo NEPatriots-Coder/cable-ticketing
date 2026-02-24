@@ -116,6 +116,10 @@ TWILIO_PHONE_NUMBER=+1234567890
 
 # App URL (for notification links)
 APP_URL=http://localhost:3000
+
+# Optional: comma-separated admin emails for optics request alerts.
+# If unset, all users with role=admin are notified.
+OPTICS_ALERT_EMAILS=you@example.com,team@example.com
 ```
 
 ## Workflow
