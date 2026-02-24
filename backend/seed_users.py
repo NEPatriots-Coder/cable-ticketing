@@ -31,9 +31,9 @@ demo_users = [
         'role': 'user'
     },
     {
-        'username': 'bob_inventory',
-        'email': 'bob@coreweave.com',
-        'phone': '+12025555678',
+        'username': 'johns',
+        'email': 'jsauer@coreweave.com',
+        'phone': '+19734192505',
         'password': 'demo123',
         'role': 'user'
     },
