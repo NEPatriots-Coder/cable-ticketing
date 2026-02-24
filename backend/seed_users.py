@@ -44,6 +44,13 @@ demo_users = [
         'password': 'cable123',
         'role': 'user'
     },
+    {
+        'username': 'dcttech_request',
+        'email': 'dcttech_request@coreweave.com',
+        'phone': '+12025555680',
+        'password': 'Optic123',
+        'role': 'user'
+    },
 ]
 
 with app.app_context():

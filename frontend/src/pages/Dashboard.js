@@ -40,6 +40,13 @@ function Dashboard({ user, onLogout }) {
           >
             Receiving
           </button>
+          <button
+            onClick={() => navigate('/optics')}
+            className="btn-nav-link"
+            aria-label="Go to Optics"
+          >
+            Optics
+          </button>
           <span>Welcome, <strong>{user.username}</strong></span>
           <button onClick={onLogout} className="btn-logout">Logout</button>
         </div>

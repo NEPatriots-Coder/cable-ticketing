@@ -146,6 +146,8 @@ Use `Authorization: Bearer <token>` for mutating endpoints such as:
 - `PATCH /api/tickets/<id>`
 - `DELETE /api/tickets/<id>`
 - `POST /api/cable-receiving`
+- `POST /api/optics-requests`
+- `PATCH /api/optics-requests/<id>/status`
 
 ### Users
 - `GET /api/users` - List all users
@@ -170,6 +172,12 @@ Use `Authorization: Bearer <token>` for mutating endpoints such as:
 - `GET /api/cable-receiving` - List receiving records
 - `GET /api/inventory/movements` - List inventory ledger movements
 - `GET /api/inventory/on-hand` - View on-hand quantity by cable type/length
+
+### Optics Requests
+- `GET /api/optics-parts` - List allowed optics parts plus `Other`
+- `POST /api/optics-requests` - Submit optics request (authenticated users)
+- `GET /api/optics-requests` - List optics requests (users see their own, admin sees all)
+- `PATCH /api/optics-requests/<id>/status` - Admin action (`approve`, `deny`, `archive`)
 
 ## Ops Safety
 

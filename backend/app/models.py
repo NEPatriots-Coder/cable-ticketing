@@ -346,6 +346,95 @@ class CableReceipt(db.Model):
             db.session.commit()
 
 
+class OpticsRequest(db.Model):
+    __tablename__ = 'optics_requests'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    part_number = db.Column(db.String(255), nullable=False, index=True)
+    quantity = db.Column(db.Integer, nullable=False)
+    requester_name = db.Column(db.String(50), nullable=False)
+    requested_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    status = db.Column(db.String(50), nullable=False, default='pending', index=True)
+    admin_note = db.Column(db.Text, nullable=True)
+    archived_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    admin_action_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True)
+    admin_action_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=_utcnow, index=True)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=_utcnow)
+
+    requester_rel = db.relationship('User', foreign_keys=[requested_by_id], lazy='joined')
+    admin_actor_rel = db.relationship('User', foreign_keys=[admin_action_by_id], lazy='joined')
+
+    @property
+    def requester(self):
+        return self.requester_rel
+
+    @property
+    def admin_actor(self):
+        return self.admin_actor_rel
+
+    def to_dict(self):
+        requester = self.requester
+        admin_actor = self.admin_actor
+        return {
+            'id': self.id,
+            'part_number': self.part_number,
+            'quantity': self.quantity,
+            'requester_name': self.requester_name,
+            'requested_by': requester.to_dict() if requester else None,
+            'status': self.status,
+            'admin_note': self.admin_note,
+            'archived_at': self.archived_at.isoformat() if self.archived_at else None,
+            'admin_action_by': admin_actor.to_dict() if admin_actor else None,
+            'admin_action_at': self.admin_action_at.isoformat() if self.admin_action_at else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+    @classmethod
+    def create(cls, requested_by_id, part_number, quantity, requester_name):
+        now = _utcnow()
+        row = cls(
+            part_number=part_number,
+            quantity=int(quantity),
+            requester_name=requester_name,
+            requested_by_id=requested_by_id,
+            status='pending',
+            created_at=now,
+            updated_at=now,
+        )
+        db.session.add(row)
+        db.session.commit()
+        return row
+
+    @classmethod
+    def get(cls, request_id):
+        return db.session.get(cls, request_id)
+
+    @classmethod
+    def all_for_actor(cls, actor):
+        query = cls.query
+        if actor.role != 'admin':
+            query = query.filter_by(requested_by_id=actor.id)
+        return query.order_by(cls.created_at.desc()).all()
+
+    @classmethod
+    def set_status(cls, request_id, status, admin_actor_id, admin_note=None):
+        row = cls.get(request_id)
+        if not row:
+            return None
+
+        now = _utcnow()
+        row.status = status
+        row.admin_action_by_id = admin_actor_id
+        row.admin_action_at = now
+        row.updated_at = now
+        row.admin_note = admin_note
+        row.archived_at = now if status == 'archived' else None
+        db.session.commit()
+        return row
+
+
 class InventoryMovement(db.Model):
     __tablename__ = 'inventory_movements'
 

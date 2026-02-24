@@ -305,3 +305,114 @@ def test_ticket_fulfillment_creates_consumption_movements(client):
     on_hand = client.get("/api/inventory/on-hand")
     assert on_hand.status_code == 200
     assert {"cable_type": "Cat6", "cable_length": "100m", "on_hand": 9} in on_hand.get_json()
+
+
+def test_optics_request_create_and_visibility(client):
+    admin = _create_user(client, "admin_optics", "admin_optics@example.com", role="admin")
+    user_a = _create_user(client, "optic_user_a", "optic_user_a@example.com")
+    user_b = _create_user(client, "optic_user_b", "optic_user_b@example.com")
+
+    created = client.post(
+        "/api/optics-requests",
+        json={
+            "selected_part": "MMS4X50-NM",
+            "quantity": 3,
+            "requester_name": "Alice B",
+        },
+        headers={"Authorization": f"Bearer {user_a['access_token']}"},
+    )
+    assert created.status_code == 201
+    row = created.get_json()["request"]
+    assert row["status"] == "pending"
+    assert row["part_number"] == "MMS4X50-NM"
+    assert row["requester_name"] == "Alice B"
+
+    created_other = client.post(
+        "/api/optics-requests",
+        json={
+            "selected_part": "Other",
+            "other_part": "CUSTOM-PART-1",
+            "quantity": 1,
+            "requester_name": "Alice B",
+        },
+        headers={"Authorization": f"Bearer {user_a['access_token']}"},
+    )
+    assert created_other.status_code == 201
+    assert created_other.get_json()["request"]["part_number"] == "CUSTOM-PART-1"
+
+    invalid_other = client.post(
+        "/api/optics-requests",
+        json={
+            "selected_part": "Other",
+            "quantity": 1,
+            "requester_name": "Alice B",
+        },
+        headers={"Authorization": f"Bearer {user_a['access_token']}"},
+    )
+    assert invalid_other.status_code == 400
+
+    user_a_list = client.get(
+        "/api/optics-requests",
+        headers={"Authorization": f"Bearer {user_a['access_token']}"},
+    )
+    assert user_a_list.status_code == 200
+    assert len(user_a_list.get_json()) == 2
+
+    user_b_list = client.get(
+        "/api/optics-requests",
+        headers={"Authorization": f"Bearer {user_b['access_token']}"},
+    )
+    assert user_b_list.status_code == 200
+    assert user_b_list.get_json() == []
+
+    admin_list = client.get(
+        "/api/optics-requests",
+        headers={"Authorization": f"Bearer {admin['access_token']}"},
+    )
+    assert admin_list.status_code == 200
+    assert len(admin_list.get_json()) == 2
+
+
+def test_optics_request_admin_actions(client):
+    admin = _create_user(client, "admin_optics_actions", "admin_optics_actions@example.com", role="admin")
+    user = _create_user(client, "optic_actor", "optic_actor@example.com")
+
+    created = client.post(
+        "/api/optics-requests",
+        json={
+            "selected_part": "SFP-GE-T-LU",
+            "quantity": 4,
+            "requester_name": "Bob C",
+        },
+        headers={"Authorization": f"Bearer {user['access_token']}"},
+    )
+    assert created.status_code == 201
+    request_id = created.get_json()["request"]["id"]
+
+    forbidden = client.patch(
+        f"/api/optics-requests/{request_id}/status",
+        json={"action": "approve"},
+        headers={"Authorization": f"Bearer {user['access_token']}"},
+    )
+    assert forbidden.status_code == 403
+
+    approved = client.patch(
+        f"/api/optics-requests/{request_id}/status",
+        json={"action": "approve", "admin_note": "Ready for pickup"},
+        headers={"Authorization": f"Bearer {admin['access_token']}"},
+    )
+    assert approved.status_code == 200
+    approved_row = approved.get_json()["request"]
+    assert approved_row["status"] == "approved"
+    assert approved_row["admin_note"] == "Ready for pickup"
+    assert approved_row["admin_action_by"]["id"] == admin["id"]
+
+    archived = client.patch(
+        f"/api/optics-requests/{request_id}/status",
+        json={"action": "archive"},
+        headers={"Authorization": f"Bearer {admin['access_token']}"},
+    )
+    assert archived.status_code == 200
+    archived_row = archived.get_json()["request"]
+    assert archived_row["status"] == "archived"
+    assert archived_row["archived_at"] is not None

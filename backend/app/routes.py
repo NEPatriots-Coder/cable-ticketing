@@ -1,5 +1,5 @@
 from flask import Blueprint, current_app, request, jsonify
-from app.models import User, Ticket, Notification, CableReceipt, InventoryMovement
+from app.models import User, Ticket, Notification, CableReceipt, InventoryMovement, OpticsRequest
 from app.notifications import notify_ticket_created, notify_status_change
 from werkzeug.security import generate_password_hash, check_password_hash
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
@@ -22,6 +22,28 @@ STATUS_TRANSITIONS = {
     'in_progress': {'fulfilled', 'closed'},
     'fulfilled': {'closed'},
     'closed': set(),
+}
+OPTICS_ALLOWED_PARTS = [
+    "MMS4X50-NM",
+    "EX-SFP-1GE-LX-LU",
+    "MMS4X00-NM-T",
+    "MMS1X00-NS400",
+    "MMS1V70-CM",
+    "MMS4X00-NM-FLT",
+    "QSFP-100G-DR-LWP-LU",
+    "HIGH4-4LG-KIT",
+    "EX-SFP-10GE-LR-LU",
+    "MAM1Q00A-QSA28",
+    "QDD-400G-LR4-S-LU",
+    "SFP-GE-T-LU",
+    "UACC-OM-SM-10G-D",
+]
+OPTICS_ALLOWED_PARTS_SET = set(OPTICS_ALLOWED_PARTS)
+OPTICS_OTHER_OPTION = "Other"
+OPTICS_ADMIN_ACTIONS = {
+    'approve': 'approved',
+    'deny': 'denied',
+    'archive': 'archived',
 }
 
 
@@ -85,6 +107,42 @@ def _validate_inventory_items(items):
         )
 
     return normalized, None
+
+
+def _validate_optics_request_payload(data):
+    selected_part = (data.get('selected_part') or '').strip()
+    other_part = (data.get('other_part') or '').strip()
+    requester_name = (data.get('requester_name') or '').strip()
+    quantity_raw = data.get('quantity')
+
+    if not requester_name:
+        return None, 'requester_name is required'
+    if len(requester_name) > 50:
+        return None, 'requester_name must be 50 characters or fewer'
+
+    try:
+        quantity = int(quantity_raw)
+    except (TypeError, ValueError):
+        return None, 'quantity must be an integer'
+    if quantity <= 0:
+        return None, 'quantity must be greater than zero'
+
+    if selected_part == OPTICS_OTHER_OPTION:
+        if not other_part:
+            return None, 'other_part is required when selected_part is Other'
+        if len(other_part) > 255:
+            return None, 'other_part must be 255 characters or fewer'
+        part_number = other_part
+    else:
+        if selected_part not in OPTICS_ALLOWED_PARTS_SET:
+            return None, 'selected_part is invalid'
+        part_number = selected_part
+
+    return {
+        'part_number': part_number,
+        'quantity': quantity,
+        'requester_name': requester_name,
+    }, None
 
 # ============= AUTH ROUTES =============
 
@@ -451,6 +509,78 @@ def inventory_on_hand():
     if not include_zero:
         summary = [row for row in summary if row.get('on_hand', 0) != 0]
     return jsonify(summary), 200
+
+
+@api.route('/optics-parts', methods=['GET'])
+def list_optics_parts():
+    return jsonify(OPTICS_ALLOWED_PARTS + [OPTICS_OTHER_OPTION]), 200
+
+
+@api.route('/optics-requests', methods=['POST'])
+def create_optics_request():
+    actor, error_response, status_code = _require_actor()
+    if error_response:
+        return error_response, status_code
+
+    data = request.json or {}
+    payload, validation_error = _validate_optics_request_payload(data)
+    if validation_error:
+        return jsonify({'error': validation_error}), 400
+
+    optics_request = OpticsRequest.create(
+        requested_by_id=actor.id,
+        part_number=payload['part_number'],
+        quantity=payload['quantity'],
+        requester_name=payload['requester_name'],
+    )
+    current_app.logger.info('optics_request_created request_id=%s actor_id=%s', optics_request.id, actor.id)
+    return jsonify({'message': 'Optics request created', 'request': optics_request.to_dict()}), 201
+
+
+@api.route('/optics-requests', methods=['GET'])
+def list_optics_requests():
+    actor, error_response, status_code = _require_actor()
+    if error_response:
+        return error_response, status_code
+
+    rows = OpticsRequest.all_for_actor(actor)
+    return jsonify([row.to_dict() for row in rows]), 200
+
+
+@api.route('/optics-requests/<int:request_id>/status', methods=['PATCH'])
+def update_optics_request_status(request_id):
+    actor, error_response, status_code = _require_actor()
+    if error_response:
+        return error_response, status_code
+    if actor.role != 'admin':
+        return jsonify({'error': 'Only admins can update optics request status'}), 403
+
+    row = OpticsRequest.get(request_id)
+    if not row:
+        return jsonify({'error': 'Optics request not found'}), 404
+
+    data = request.json or {}
+    action = (data.get('action') or '').strip().lower()
+    if action not in OPTICS_ADMIN_ACTIONS:
+        return jsonify({'error': 'action must be one of approve, deny, archive'}), 400
+
+    admin_note = data.get('admin_note')
+    if admin_note is not None:
+        admin_note = str(admin_note).strip() or None
+
+    updated = OpticsRequest.set_status(
+        request_id=request_id,
+        status=OPTICS_ADMIN_ACTIONS[action],
+        admin_actor_id=actor.id,
+        admin_note=admin_note,
+    )
+    current_app.logger.info(
+        'optics_request_status_changed request_id=%s actor_id=%s action=%s',
+        request_id,
+        actor.id,
+        action,
+    )
+    return jsonify({'message': 'Optics request updated', 'request': updated.to_dict()}), 200
 
 # ============= APPROVAL ROUTES (Token-based) =============
 

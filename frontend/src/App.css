@@ -123,6 +123,12 @@
   font-size: 16px;
 }
 
+.optics-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
 .sub-label {
   font-size: 12px !important;
   color: #888 !important;
