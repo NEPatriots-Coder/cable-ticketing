@@ -101,6 +101,20 @@ const ReceivingPage = ({ user, onLogout }) => {
           >
             Dashboard
           </button>
+          <button
+            onClick={() => navigate('/optics')}
+            className="btn-nav-link"
+            aria-label="Go to Optics"
+          >
+            Optics
+          </button>
+          <button
+            onClick={() => navigate('/optics-return')}
+            className="btn-nav-link"
+            aria-label="Go to Optics Return"
+          >
+            Optics Return
+          </button>
           <span>Welcome, <strong>{user.username}</strong></span>
           <button onClick={onLogout} className="btn-logout">Logout</button>
         </div>

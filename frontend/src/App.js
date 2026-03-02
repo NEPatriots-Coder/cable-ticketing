@@ -6,6 +6,7 @@ import RegisterForm from './components/RegisterForm';
 import ApprovalPage from './pages/ApprovalPage';
 import ReceivingPage from './pages/ReceivingPage';
 import OpticsPage from './pages/OpticsPage';
+import OpticsReturnPage from './pages/OpticsReturnPage';
 import axios from './api/axiosinstance';
 import './App.css';
 
@@ -74,6 +75,9 @@ function App() {
           } />
           <Route path="/optics" element={
             user ? <OpticsPage user={user} onLogout={handleLogout} /> : <Navigate to="/login" />
+          } />
+          <Route path="/optics-return" element={
+            user ? <OpticsReturnPage user={user} onLogout={handleLogout} /> : <Navigate to="/login" />
           } />
         </Routes>
       </div>

@@ -183,6 +183,11 @@ Use `Authorization: Bearer <token>` for mutating endpoints such as:
 - `GET /api/optics-requests` - List optics requests (users see their own, admin sees all)
 - `PATCH /api/optics-requests/<id>/status` - Admin action (`approve`, `deny`, `archive`)
 
+### Optics Returns
+- `POST /api/optics-returns` - Submit optics return (authenticated users)
+- `GET /api/optics-returns` - List optics returns (users see their own, admin sees all)
+- `PATCH /api/optics-returns/<id>/status` - Admin action (`approve`, `deny`, `archive`)
+
 ## Ops Safety
 
 - Backend no longer auto-seeds users on every boot (`RUN_SEED_ON_START=false` by default).

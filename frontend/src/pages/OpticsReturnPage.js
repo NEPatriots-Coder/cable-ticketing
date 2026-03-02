@@ -4,7 +4,7 @@ import axios from '../api/axiosinstance';
 
 const OTHER_OPTION = 'Other';
 
-const OpticsPage = ({ user, onLogout }) => {
+const OpticsReturnPage = ({ user, onLogout }) => {
   const navigate = useNavigate();
 
   const [partOptions, setPartOptions] = useState([]);
@@ -16,8 +16,8 @@ const OpticsPage = ({ user, onLogout }) => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const [requests, setRequests] = useState([]);
-  const [requestsLoading, setRequestsLoading] = useState(true);
+  const [returns, setReturns] = useState([]);
+  const [returnsLoading, setReturnsLoading] = useState(true);
 
   const isAdmin = user?.role === 'admin';
 
@@ -31,21 +31,21 @@ const OpticsPage = ({ user, onLogout }) => {
     }
   }, []);
 
-  const fetchRequests = useCallback(async () => {
+  const fetchReturns = useCallback(async () => {
     try {
-      const response = await axios.get('/optics-requests');
-      setRequests(response.data || []);
+      const response = await axios.get('/optics-returns');
+      setReturns(response.data || []);
     } catch (err) {
-      console.error('Error fetching optics requests:', err);
+      console.error('Error fetching optics returns:', err);
     } finally {
-      setRequestsLoading(false);
+      setReturnsLoading(false);
     }
   }, []);
 
   useEffect(() => {
     fetchPartOptions();
-    fetchRequests();
-  }, [fetchPartOptions, fetchRequests]);
+    fetchReturns();
+  }, [fetchPartOptions, fetchReturns]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -63,26 +63,26 @@ const OpticsPage = ({ user, onLogout }) => {
         payload.other_part = otherPart.trim();
       }
 
-      await axios.post('/optics-requests', payload);
-      setSuccess('Optics request submitted successfully.');
+      await axios.post('/optics-returns', payload);
+      setSuccess('Optics return submitted successfully.');
       setSelectedPart('');
       setOtherPart('');
       setQuantity('');
       setRequesterName('');
-      fetchRequests();
+      fetchReturns();
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to submit optics request');
+      setError(err.response?.data?.error || 'Failed to submit optics return');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAdminAction = async (requestId, action) => {
+  const handleAdminAction = async (returnId, action) => {
     try {
-      await axios.patch(`/optics-requests/${requestId}/status`, { action });
-      fetchRequests();
+      await axios.patch(`/optics-returns/${returnId}/status`, { action });
+      fetchReturns();
     } catch (err) {
-      setError(err.response?.data?.error || `Failed to ${action} request`);
+      setError(err.response?.data?.error || `Failed to ${action} return`);
     }
   };
 
@@ -113,11 +113,11 @@ const OpticsPage = ({ user, onLogout }) => {
             Receiving
           </button>
           <button
-            onClick={() => navigate('/optics-return')}
+            onClick={() => navigate('/optics')}
             className="btn-nav-link"
-            aria-label="Go to Optics Return"
+            aria-label="Go to Optics"
           >
-            Optics Return
+            Optics
           </button>
           <span>Welcome, <strong>{user.username}</strong></span>
           <button onClick={onLogout} className="btn-logout">Logout</button>
@@ -126,16 +126,16 @@ const OpticsPage = ({ user, onLogout }) => {
 
       <div className="main-content">
         <div className="ticket-form-container">
-          <h3>🔦 Submit Optics Request</h3>
+          <h3>🔦 Submit Optics Return</h3>
 
           {error && <div className="error-message" role="alert">{error}</div>}
           {success && <div className="success-message" role="status">{success}</div>}
 
           <form onSubmit={handleSubmit}>
             <div className="form-group">
-              <label htmlFor="optics-part">Part Number</label>
+              <label htmlFor="optics-return-part">Part Number</label>
               <select
-                id="optics-part"
+                id="optics-return-part"
                 value={selectedPart}
                 onChange={e => setSelectedPart(e.target.value)}
                 required
@@ -149,9 +149,9 @@ const OpticsPage = ({ user, onLogout }) => {
 
             {selectedPart === OTHER_OPTION && (
               <div className="form-group">
-                <label htmlFor="other-part">Model (if not listed)</label>
+                <label htmlFor="other-return-part">Model (if not listed)</label>
                 <input
-                  id="other-part"
+                  id="other-return-part"
                   type="text"
                   value={otherPart}
                   onChange={e => setOtherPart(e.target.value)}
@@ -163,9 +163,9 @@ const OpticsPage = ({ user, onLogout }) => {
             )}
 
             <div className="form-group">
-              <label htmlFor="optics-quantity">Quantity</label>
+              <label htmlFor="optics-return-quantity">Quantity</label>
               <input
-                id="optics-quantity"
+                id="optics-return-quantity"
                 type="number"
                 value={quantity}
                 onChange={e => setQuantity(e.target.value)}
@@ -175,9 +175,9 @@ const OpticsPage = ({ user, onLogout }) => {
             </div>
 
             <div className="form-group">
-              <label htmlFor="requester-name">Requester Name</label>
+              <label htmlFor="returner-name">Requester Name</label>
               <input
-                id="requester-name"
+                id="returner-name"
                 type="text"
                 value={requesterName}
                 onChange={e => setRequesterName(e.target.value)}
@@ -188,51 +188,51 @@ const OpticsPage = ({ user, onLogout }) => {
             </div>
 
             <button type="submit" className="btn-primary" disabled={loading}>
-              {loading ? 'Submitting...' : 'Submit Request'}
+              {loading ? 'Submitting...' : 'Submit Return'}
             </button>
           </form>
         </div>
 
         <div className="ticket-list-container">
           <div className="ticket-list-header">
-            <h3>{isAdmin ? 'All Optics Requests' : 'My Optics Requests'}</h3>
+            <h3>{isAdmin ? 'All Optics Returns' : 'My Optics Returns'}</h3>
           </div>
 
-          {requestsLoading ? (
+          {returnsLoading ? (
             <div className="loading"><span className="loader">Loading...</span></div>
-          ) : requests.length === 0 ? (
-            <div className="no-tickets">No optics requests yet.</div>
+          ) : returns.length === 0 ? (
+            <div className="no-tickets">No optics returns yet.</div>
           ) : (
             <div className="tickets-grid">
-              {requests.map(req => (
-                <div key={req.id} className="ticket-card">
+              {returns.map(ret => (
+                <div key={ret.id} className="ticket-card">
                   <div className="ticket-header">
-                    <span className="ticket-id">Request #{req.id}</span>
-                    <span className="status-badge">{req.status}</span>
+                    <span className="ticket-id">Return #{ret.id}</span>
+                    <span className="status-badge">{ret.status}</span>
                   </div>
                   <div className="ticket-body">
                     <div className="ticket-spec">
-                      <strong>Part:</strong> {req.part_number}
+                      <strong>Part:</strong> {ret.part_number}
                     </div>
                     <div className="ticket-spec">
-                      <strong>Quantity:</strong> {req.quantity}
+                      <strong>Quantity:</strong> {ret.quantity}
                     </div>
                     <div className="ticket-spec">
-                      <strong>Name:</strong> {req.requester_name}
+                      <strong>Name:</strong> {ret.requester_name}
                     </div>
-                    {req.admin_note && (
-                      <div className="ticket-notes">{req.admin_note}</div>
+                    {ret.admin_note && (
+                      <div className="ticket-notes">{ret.admin_note}</div>
                     )}
                   </div>
                   <div className="ticket-footer">
                     <div className="ticket-users">
                       <div>
                         <small>Submitted by</small>
-                        <div>{req.requested_by?.username || '—'}</div>
+                        <div>{ret.requested_by?.username || '—'}</div>
                       </div>
                       <div>
                         <small>Submitted at</small>
-                        <div style={{ fontSize: '12px' }}>{formatDate(req.created_at)}</div>
+                        <div style={{ fontSize: '12px' }}>{formatDate(ret.created_at)}</div>
                       </div>
                     </div>
                   </div>
@@ -241,21 +241,21 @@ const OpticsPage = ({ user, onLogout }) => {
                       <button
                         type="button"
                         className="btn-small btn-progress"
-                        onClick={() => handleAdminAction(req.id, 'approve')}
+                        onClick={() => handleAdminAction(ret.id, 'approve')}
                       >
                         Approve
                       </button>
                       <button
                         type="button"
                         className="btn-small btn-danger"
-                        onClick={() => handleAdminAction(req.id, 'deny')}
+                        onClick={() => handleAdminAction(ret.id, 'deny')}
                       >
                         Deny
                       </button>
                       <button
                         type="button"
                         className="btn-small"
-                        onClick={() => handleAdminAction(req.id, 'archive')}
+                        onClick={() => handleAdminAction(ret.id, 'archive')}
                       >
                         Archive
                       </button>
@@ -271,4 +271,4 @@ const OpticsPage = ({ user, onLogout }) => {
   );
 };
 
-export default OpticsPage;
+export default OpticsReturnPage;

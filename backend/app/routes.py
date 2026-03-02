@@ -1,10 +1,12 @@
 from flask import Blueprint, current_app, request, jsonify
-from app.models import User, Ticket, Notification, CableReceipt, InventoryMovement, OpticsRequest
+from app.models import User, Ticket, Notification, CableReceipt, InventoryMovement, OpticsRequest, OpticsReturn
 from app.notifications import (
     notify_ticket_created,
     notify_status_change,
     notify_optics_request_created,
     notify_optics_request_status_change,
+    notify_optics_return_created,
+    notify_optics_return_status_change,
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
@@ -588,6 +590,75 @@ def update_optics_request_status(request_id):
         action,
     )
     return jsonify({'message': 'Optics request updated', 'request': updated.to_dict()}), 200
+
+
+@api.route('/optics-returns', methods=['POST'])
+def create_optics_return():
+    actor, error_response, status_code = _require_actor()
+    if error_response:
+        return error_response, status_code
+
+    data = request.json or {}
+    payload, validation_error = _validate_optics_request_payload(data)
+    if validation_error:
+        return jsonify({'error': validation_error}), 400
+
+    optics_return = OpticsReturn.create(
+        requested_by_id=actor.id,
+        part_number=payload['part_number'],
+        quantity=payload['quantity'],
+        requester_name=payload['requester_name'],
+    )
+    notify_optics_return_created(optics_return)
+    current_app.logger.info('optics_return_created return_id=%s actor_id=%s', optics_return.id, actor.id)
+    return jsonify({'message': 'Optics return created', 'return': optics_return.to_dict()}), 201
+
+
+@api.route('/optics-returns', methods=['GET'])
+def list_optics_returns():
+    actor, error_response, status_code = _require_actor()
+    if error_response:
+        return error_response, status_code
+
+    rows = OpticsReturn.all_for_actor(actor)
+    return jsonify([row.to_dict() for row in rows]), 200
+
+
+@api.route('/optics-returns/<int:return_id>/status', methods=['PATCH'])
+def update_optics_return_status(return_id):
+    actor, error_response, status_code = _require_actor()
+    if error_response:
+        return error_response, status_code
+    if actor.role != 'admin':
+        return jsonify({'error': 'Only admins can update optics return status'}), 403
+
+    row = OpticsReturn.get(return_id)
+    if not row:
+        return jsonify({'error': 'Optics return not found'}), 404
+
+    data = request.json or {}
+    action = (data.get('action') or '').strip().lower()
+    if action not in OPTICS_ADMIN_ACTIONS:
+        return jsonify({'error': 'action must be one of approve, deny, archive'}), 400
+
+    admin_note = data.get('admin_note')
+    if admin_note is not None:
+        admin_note = str(admin_note).strip() or None
+
+    updated = OpticsReturn.set_status(
+        request_id=return_id,
+        status=OPTICS_ADMIN_ACTIONS[action],
+        admin_actor_id=actor.id,
+        admin_note=admin_note,
+    )
+    notify_optics_return_status_change(updated, updated.status)
+    current_app.logger.info(
+        'optics_return_status_changed return_id=%s actor_id=%s action=%s',
+        return_id,
+        actor.id,
+        action,
+    )
+    return jsonify({'message': 'Optics return updated', 'return': updated.to_dict()}), 200
 
 # ============= APPROVAL ROUTES (Token-based) =============
 

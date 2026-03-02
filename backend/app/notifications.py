@@ -328,3 +328,75 @@ def notify_optics_request_status_change(optics_request, new_status):
         f"Optics Request #{optics_request.id} {status_label}",
         email_html,
     )
+
+
+def notify_optics_return_created(optics_return):
+    recipients = _optics_admin_emails()
+    if not recipients:
+        return
+
+    app_url = current_app.config['APP_URL'].rstrip('/')
+    requested_by = optics_return.requester.username if optics_return.requester else 'Unknown'
+
+    email_html = f"""
+<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+        <h2 style="color: #2563eb;">New Optics Return</h2>
+
+        <div style="background-color: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <p><strong>Return ID:</strong> #{optics_return.id}</p>
+            <p><strong>Part Number:</strong> {optics_return.part_number}</p>
+            <p><strong>Quantity:</strong> {optics_return.quantity}</p>
+            <p><strong>Requester Name:</strong> {optics_return.requester_name}</p>
+            <p><strong>Submitted By:</strong> {requested_by}</p>
+            <p><strong>Status:</strong> {optics_return.status.upper()}</p>
+        </div>
+
+        <p><a href="{app_url}/optics-return" style="color: #2563eb;">Open Optics Returns</a></p>
+    </div>
+</body>
+</html>
+"""
+
+    subject = f"Optics Return #{optics_return.id} - {optics_return.part_number}"
+    for recipient in recipients:
+        send_email(recipient, subject, email_html)
+
+
+def notify_optics_return_status_change(optics_return, new_status):
+    requester = optics_return.requester
+    if not requester or not requester.email:
+        return
+
+    app_url = current_app.config['APP_URL'].rstrip('/')
+    status_label = (new_status or '').upper()
+    admin_actor = optics_return.admin_actor.username if optics_return.admin_actor else 'Admin'
+
+    email_html = f"""
+<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+        <h2 style="color: #2563eb;">Optics Return Update</h2>
+        <p style="font-size: 18px; font-weight: bold;">Your return status is now {status_label}.</p>
+
+        <div style="background-color: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <p><strong>Return ID:</strong> #{optics_return.id}</p>
+            <p><strong>Part Number:</strong> {optics_return.part_number}</p>
+            <p><strong>Quantity:</strong> {optics_return.quantity}</p>
+            <p><strong>Requester Name:</strong> {optics_return.requester_name}</p>
+            <p><strong>Updated By:</strong> {admin_actor}</p>
+            {f"<p><strong>Admin Note:</strong> {optics_return.admin_note}</p>" if optics_return.admin_note else ""}
+        </div>
+
+        <p><a href="{app_url}/optics-return" style="color: #2563eb;">View Optics Returns</a></p>
+    </div>
+</body>
+</html>
+"""
+
+    send_email(
+        requester.email,
+        f"Optics Return #{optics_return.id} {status_label}",
+        email_html,
+    )

@@ -4,6 +4,7 @@ from flask_login import LoginManager
 from flask_sqlalchemy import SQLAlchemy
 from dotenv import load_dotenv
 from sqlalchemy import inspect, text
+from sqlalchemy.exc import IntegrityError
 import os
 
 load_dotenv()
@@ -27,6 +28,26 @@ def _ensure_runtime_schema():
     if 'storage_location' not in columns:
         with db.engine.begin() as conn:
             conn.execute(text("ALTER TABLE cable_receiving ADD COLUMN storage_location VARCHAR(255)"))
+
+
+def _safe_create_all():
+    """
+    Run metadata creation safely in multi-worker startup.
+    """
+    try:
+        db.create_all()
+    except IntegrityError as exc:
+        # Concurrent worker startup can race on CREATE TABLE/SEQUENCE.
+        # If the target table now exists, treat this as benign and continue.
+        message = str(exc).lower()
+        if (
+            'duplicate key value violates unique constraint "pg_class_relname_nsp_index"' in message
+            or "already exists" in message
+        ):
+            table_names = set(inspect(db.engine).get_table_names())
+            if 'optics_returns' in table_names:
+                return
+        raise
 
 
 def create_app():
@@ -66,7 +87,7 @@ def create_app():
     app.register_blueprint(api, url_prefix='/api')
 
     with app.app_context():
-        db.create_all()
+        _safe_create_all()
         _ensure_runtime_schema()
         print('✅ SQL database initialized successfully')
 
