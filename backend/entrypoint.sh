@@ -7,4 +7,4 @@ if [ "${RUN_SEED_ON_START:-false}" = "true" ]; then
 fi
 
 echo "Starting server..."
-exec gunicorn --bind 0.0.0.0:5000 --workers 2 --timeout 120 run:app
+exec gunicorn --bind 0.0.0.0:5000 --workers 3 --timeout 120 run:app

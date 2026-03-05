@@ -45,7 +45,7 @@ demo_users = [
         'role': 'user'
     },
     {
-        'username': 'tech_request',
+        'username': 'lzl01_tech',
         'email': 'dcttech_request@coreweave.com',
         'phone': '+12025555680',
         'password': 'Optic123',
