@@ -422,6 +422,35 @@ def test_optics_request_admin_actions(client):
     assert archived_row["archived_at"] is not None
 
 
+def test_optics_request_kit_expands_to_component_rows(client):
+    user = _create_user(client, "optic_kit_user", "optic_kit_user@example.com")
+
+    created = client.post(
+        "/api/optics-requests",
+        json={
+            "selected_part": "Kitted GB 300",
+            "quantity": 2,
+            "requester_name": "Kit Owner",
+        },
+        headers={"Authorization": f"Bearer {user['access_token']}"},
+    )
+    assert created.status_code == 201
+    payload = created.get_json()
+    assert payload["message"] == "Optics kit request created"
+    assert payload["requested_quantity"] == 2
+    assert len(payload["requests"]) == 3
+
+    rows = client.get(
+        "/api/optics-requests",
+        headers={"Authorization": f"Bearer {user['access_token']}"},
+    )
+    assert rows.status_code == 200
+    by_part = {row["part_number"]: row["quantity"] for row in rows.get_json()}
+    assert by_part["MMS1V70-CM"] == 8
+    assert by_part["MMS1X00-NS400"] == 72
+    assert by_part["MMS4X00-NM-FLT"] == 144
+
+
 def test_optics_return_create_and_visibility(client):
     admin = _create_user(client, "admin_optics_return", "admin_optics_return@example.com", role="admin")
     user_a = _create_user(client, "optic_return_user_a", "optic_return_user_a@example.com")
@@ -531,3 +560,32 @@ def test_optics_return_admin_actions(client):
     archived_row = archived.get_json()["return"]
     assert archived_row["status"] == "archived"
     assert archived_row["archived_at"] is not None
+
+
+def test_optics_return_kit_expands_to_component_rows(client):
+    user = _create_user(client, "optic_return_kit_user", "optic_return_kit_user@example.com")
+
+    created = client.post(
+        "/api/optics-returns",
+        json={
+            "selected_part": "Kitted GB 300",
+            "quantity": 1,
+            "requester_name": "Kit Returner",
+        },
+        headers={"Authorization": f"Bearer {user['access_token']}"},
+    )
+    assert created.status_code == 201
+    payload = created.get_json()
+    assert payload["message"] == "Optics kit return created"
+    assert payload["requested_quantity"] == 1
+    assert len(payload["returns"]) == 3
+
+    rows = client.get(
+        "/api/optics-returns",
+        headers={"Authorization": f"Bearer {user['access_token']}"},
+    )
+    assert rows.status_code == 200
+    by_part = {row["part_number"]: row["quantity"] for row in rows.get_json()}
+    assert by_part["MMS1V70-CM"] == 4
+    assert by_part["MMS1X00-NS400"] == 36
+    assert by_part["MMS4X00-NM-FLT"] == 72

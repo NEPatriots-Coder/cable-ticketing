@@ -34,6 +34,7 @@ OPTICS_ALLOWED_PARTS = [
     "MMS4X50-NM",
     "EX-SFP-1GE-LX-LU",
     "MMS4X00-NM-T",
+    "Kitted GB 300",
     "MMS1X00-NS400",
     "MMS1V70-CM",
     "MMS4X00-NM-FLT",
@@ -47,6 +48,13 @@ OPTICS_ALLOWED_PARTS = [
 ]
 OPTICS_ALLOWED_PARTS_SET = set(OPTICS_ALLOWED_PARTS)
 OPTICS_OTHER_OPTION = "Other"
+OPTICS_KIT_BOMS = {
+    "Kitted GB 300": [
+        {"part_number": "MMS1V70-CM", "quantity": 4},
+        {"part_number": "MMS1X00-NS400", "quantity": 36},
+        {"part_number": "MMS4X00-NM-FLT", "quantity": 72},
+    ],
+}
 OPTICS_ADMIN_ACTIONS = {
     'approve': 'approved',
     'deny': 'denied',
@@ -139,16 +147,26 @@ def _validate_optics_request_payload(data):
             return None, 'other_part is required when selected_part is Other'
         if len(other_part) > 255:
             return None, 'other_part must be 255 characters or fewer'
-        part_number = other_part
+        line_items = [{'part_number': other_part, 'quantity': quantity}]
     else:
         if selected_part not in OPTICS_ALLOWED_PARTS_SET:
             return None, 'selected_part is invalid'
-        part_number = selected_part
+        kit_bom = OPTICS_KIT_BOMS.get(selected_part)
+        if kit_bom:
+            line_items = [
+                {
+                    'part_number': component['part_number'],
+                    'quantity': component['quantity'] * quantity,
+                }
+                for component in kit_bom
+            ]
+        else:
+            line_items = [{'part_number': selected_part, 'quantity': quantity}]
 
     return {
-        'part_number': part_number,
-        'quantity': quantity,
+        'line_items': line_items,
         'requester_name': requester_name,
+        'requested_quantity': quantity,
     }, None
 
 # ============= AUTH ROUTES =============
@@ -534,15 +552,27 @@ def create_optics_request():
     if validation_error:
         return jsonify({'error': validation_error}), 400
 
-    optics_request = OpticsRequest.create(
-        requested_by_id=actor.id,
-        part_number=payload['part_number'],
-        quantity=payload['quantity'],
-        requester_name=payload['requester_name'],
-    )
-    notify_optics_request_created(optics_request)
-    current_app.logger.info('optics_request_created request_id=%s actor_id=%s', optics_request.id, actor.id)
-    return jsonify({'message': 'Optics request created', 'request': optics_request.to_dict()}), 201
+    created_rows = []
+    for item in payload['line_items']:
+        optics_request = OpticsRequest.create(
+            requested_by_id=actor.id,
+            part_number=item['part_number'],
+            quantity=item['quantity'],
+            requester_name=payload['requester_name'],
+        )
+        notify_optics_request_created(optics_request)
+        current_app.logger.info('optics_request_created request_id=%s actor_id=%s', optics_request.id, actor.id)
+        created_rows.append(optics_request)
+
+    if len(created_rows) == 1:
+        return jsonify({'message': 'Optics request created', 'request': created_rows[0].to_dict()}), 201
+    return jsonify(
+        {
+            'message': 'Optics kit request created',
+            'requested_quantity': payload['requested_quantity'],
+            'requests': [row.to_dict() for row in created_rows],
+        }
+    ), 201
 
 
 @api.route('/optics-requests', methods=['GET'])
@@ -603,15 +633,27 @@ def create_optics_return():
     if validation_error:
         return jsonify({'error': validation_error}), 400
 
-    optics_return = OpticsReturn.create(
-        requested_by_id=actor.id,
-        part_number=payload['part_number'],
-        quantity=payload['quantity'],
-        requester_name=payload['requester_name'],
-    )
-    notify_optics_return_created(optics_return)
-    current_app.logger.info('optics_return_created return_id=%s actor_id=%s', optics_return.id, actor.id)
-    return jsonify({'message': 'Optics return created', 'return': optics_return.to_dict()}), 201
+    created_rows = []
+    for item in payload['line_items']:
+        optics_return = OpticsReturn.create(
+            requested_by_id=actor.id,
+            part_number=item['part_number'],
+            quantity=item['quantity'],
+            requester_name=payload['requester_name'],
+        )
+        notify_optics_return_created(optics_return)
+        current_app.logger.info('optics_return_created return_id=%s actor_id=%s', optics_return.id, actor.id)
+        created_rows.append(optics_return)
+
+    if len(created_rows) == 1:
+        return jsonify({'message': 'Optics return created', 'return': created_rows[0].to_dict()}), 201
+    return jsonify(
+        {
+            'message': 'Optics kit return created',
+            'requested_quantity': payload['requested_quantity'],
+            'returns': [row.to_dict() for row in created_rows],
+        }
+    ), 201
 
 
 @api.route('/optics-returns', methods=['GET'])
